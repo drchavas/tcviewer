@@ -112,7 +112,7 @@
       <div class="row" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">
         <label>Day view</label><input id="dateSel" type="date"></div>
       <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
-      <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day (00/06/12/18 UTC positions).</div>
+      <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
     </details>
     <details id="legend" class="ctl" open>
       <summary>Legend &amp; layers</summary>
@@ -623,19 +623,31 @@ window.__initViewer = function(){
       const dayPts=pts.filter(p=> p[ix.t].slice(0,8)===ymd && SYN.includes(p[ix.t].slice(8,10)));
       if(!dayPts.length) return;
       count++;
-      const ll=dayPts.map(p=>[p[ix.lat],p[ix.lon]]);
-      if(ll.length>1) L.polyline(ll,{color:'#cdd9e5',weight:1.5,opacity:0.45}).addTo(dateLayer);
-      dayPts.forEach(p=>{
+      const trackLL=pts.map(p=>[p[ix.lat],p[ix.lon]]);
+      // full track rendered exactly like the single-storm view — coloured segments…
+      for(let i=0;i<trackLL.length-1;i++){
+        L.polyline([trackLL[i],trackLL[i+1]],{color:catColor(pts[i][ix.sshs]),weight:3,opacity:0.95}).addTo(dateLayer);
+      }
+      // …and a clickable dot at every track point
+      pts.forEach(p=>{
         const d=pointData(p); allLL.push([d.lat,d.lon]);
         const m=L.circleMarker([d.lat,d.lon],{radius:5,color:'#0b1119',weight:0.8,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
         m.on('click', ()=> showDayInfo(s,p));
         m.on('mouseover',function(){this.setStyle({radius:7});}); m.on('mouseout',function(){this.setStyle({radius:5});});
       });
+      // highlight this date's 00/06/12/18 UTC positions (white ring, drawn on top)
+      dayPts.forEach(p=>{
+        const d=pointData(p);
+        const m=L.circleMarker([d.lat,d.lon],{radius:6,color:'#ffffff',weight:2,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
+        m.on('click', ()=> showDayInfo(s,p));
+        m.on('mouseover',function(){this.setStyle({radius:8});}); m.on('mouseout',function(){this.setStyle({radius:6});});
+      });
+      // name label at this date's first synoptic position
       const p0=dayPts[0];
       L.marker([p0[ix.lat],p0[ix.lon]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
         html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
     });
-    if(allLL.length) map.fitBounds(L.latLngBounds(allLL).pad(0.4));
+    if(allLL.length) map.fitBounds(L.latLngBounds(allLL).pad(0.2));
     document.getElementById('stormTitle').textContent = `Day view — ${fmtTime(ymd+'0000').date}`;
     document.getElementById('stormSub').innerHTML = '&nbsp;';
     dateSub.style.display='block';
