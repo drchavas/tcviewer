@@ -108,24 +108,32 @@
     <div id="loadmsg">Loading…</div>
     <div id="info" class="ctl"></div>
     <details id="controls" class="ctl" open>
-      <summary>Select storm</summary>
-      <div class="row"><label>Basin</label><select id="basinSel"></select></div>
-      <div class="row"><label>Year</label><select id="yearSel"></select></div>
-      <div class="row"><label>Storm</label><select id="stormSel"></select></div>
-      <div class="stitle" id="stormTitle">&nbsp;</div>
-      <div class="ssub" id="stormSub">&nbsp;</div>
-      <div class="row" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">
-        <label>Day view</label>
-        <span class="dateparts">
-          <input id="ySel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
-          <span class="sep">-</span>
-          <input id="mSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
-          <span class="sep">-</span>
-          <input id="dSel" class="dp" type="number" step="1" min="1" max="31" placeholder="DD" aria-label="Day">
-        </span></div>
-      <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
-      <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
-      <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
+      <summary>View</summary>
+      <div class="row"><label>Mode</label><select id="modeSel">
+        <option value="storm">Single Storm</option>
+        <option value="day">Day in History</option>
+      </select></div>
+      <div id="stormControls">
+        <div class="row"><label>Basin</label><select id="basinSel"></select></div>
+        <div class="row"><label>Year</label><select id="yearSel"></select></div>
+        <div class="row"><label>Storm</label><select id="stormSel"></select></div>
+        <div class="stitle" id="stormTitle">&nbsp;</div>
+        <div class="ssub" id="stormSub">&nbsp;</div>
+      </div>
+      <div id="dayControls" style="display:none">
+        <div class="row" style="margin-top:2px">
+          <label>Date</label>
+          <span class="dateparts">
+            <input id="ySel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
+            <span class="sep">-</span>
+            <input id="mSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
+            <span class="sep">-</span>
+            <input id="dSel" class="dp" type="number" step="1" min="1" max="31" placeholder="DD" aria-label="Day">
+          </span></div>
+        <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
+        <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
+        <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
+      </div>
     </details>
     <details id="legend" class="ctl" open>
       <summary>Legend &amp; layers</summary>
@@ -589,6 +597,22 @@ window.__initViewer = function(){
   yearSel.addEventListener('change', ()=> populateStorms(basinSel.value, +yearSel.value));
   stormSel.addEventListener('change', ()=> renderStorm(DATA.storms[+stormSel.value]));
 
+  // ---------- view mode: Single Storm vs Day in History ----------
+  const modeSel = document.getElementById('modeSel');
+  const stormControls = document.getElementById('stormControls');
+  const dayControls = document.getElementById('dayControls');
+  function applyMode(m){
+    modeSel.value = m;
+    const day = (m==='day');
+    dayControls.style.display   = day ? '' : 'none';
+    stormControls.style.display = day ? 'none' : '';
+  }
+  modeSel.addEventListener('change', ()=>{
+    const m = modeSel.value; applyMode(m);
+    if(m==='day'){ if(dateSel.value) showDay(dateSel.value); }                 // re-plot if a date is already set
+    else { dateSel.value=''; renderStorm(DATA.storms[+stormSel.value]); }      // back to the selected storm
+  });
+
   // ---------- day view: all storms active on a chosen date ----------
   const ySel=document.getElementById('ySel'), mSel=document.getElementById('mSel'), dSel=document.getElementById('dSel');
   const dateSub = document.getElementById('dateSub');
@@ -610,6 +634,7 @@ window.__initViewer = function(){
   function selectStormBySid(sid){
     const i = DATA.storms.findIndex(s=>s.sid===sid); if(i<0) return;
     const s = DATA.storms[i];
+    applyMode('storm');                          // "View full track" from day view → switch to Single Storm
     basinSel.value = presentBasins.includes(s.basin) ? s.basin : 'ALL';
     populateYears(basinSel.value, s.year);
     populateStorms(basinSel.value, s.year, i);   // renders the storm + exits day view
@@ -692,18 +717,16 @@ window.__initViewer = function(){
         html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
     });
     if(!viewLocked) goGlobal();   // first date entered → snap to global; locks the domain thereafter
-    document.getElementById('stormTitle').textContent = `Day view — ${fmtTime(ymd+'0000').date}`;
-    document.getElementById('stormSub').innerHTML = '&nbsp;';
+    const dstr = fmtTime(ymd+'0000').date;
     dateSub.style.display='block';
-    dateSub.innerHTML = count ? `<b>${count}</b> tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
-                              : 'No storms on this date';
+    dateSub.innerHTML = count ? `<b>${dstr}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
+                              : `<b>${dstr}</b> &middot; no storms on this date`;
   }
   // Any of the three boxes changing (typed or stepped) re-plots. Day/month overflow
   // rolls over naturally (e.g. Aug 31 + one day → Sep 1); the year is clamped to the data.
   function onDateChange(){
     const y=ySel.value, m=mSel.value, d=dSel.value;
-    if(y===''&&m===''&&d===''){ renderStorm(DATA.storms[+stormSel.value]); return; }  // all cleared → storm
-    if(y===''||m===''||d==='') return;                                                // wait for all three
+    if(y===''||m===''||d==='') return;                                                // wait for all three boxes
     let yi=Math.round(+y), mi=Math.round(+m), di=Math.round(+d);
     if(!Number.isFinite(yi)||!Number.isFinite(mi)||!Number.isFinite(di)) return;
     // normalise month/day overflow with a dummy year, then carry any year change onto yi
