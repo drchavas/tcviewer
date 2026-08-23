@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TC Viewer — Tropical Cyclone Track &amp; Wind-Field Explorer</title>
+<meta name="description" content="Interactive explorer for global tropical cyclone tracks and wind fields (34/50/64 kt radii, Rmax) from NOAA IBTrACS — all basins, all storms in the record.">
+<meta name="author" content="Dan Chavas">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%80%3C/text%3E%3C/svg%3E">
+<meta property="og:title" content="TC Viewer — Tropical Cyclone Track &amp; Wind-Field Explorer">
+<meta property="og:description" content="Interactive global tropical-cyclone tracks and wind fields from NOAA IBTrACS.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tcviewer.org/">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header{padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1000px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;flex:1 1 auto;min-height:0}
+  #left{flex:1 1 100%;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#0b1119}
+  #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
+           text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
+  .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  #controls{top:10px;left:10px;width:250px}
+  #legend{bottom:14px;left:10px;width:250px}
+  #info{top:10px;right:10px;width:270px;display:none;max-height:calc(100% - 20px);overflow-y:auto}
+  #info .infoclose{position:absolute;top:8px;right:9px;background:none;border:none;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:0}
+  #info .infoclose:hover{color:var(--text)}
+  .pct{color:#ffcf6b;font-weight:600;font-size:10.5px}
+  .hists{margin-top:9px;border-top:1px solid var(--line);padding-top:8px;padding-right:12px}
+  .histstitle{font-size:11px;color:var(--muted);margin-bottom:7px}
+  .hist{margin-bottom:8px}
+  .histh{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px}
+  .histh b{color:var(--text)} .histh span{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+  .hist svg{display:block;background:#0e1722;border:1px solid var(--line);border-radius:3px;margin-top:3px}
+  .ctl h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 46px;color:var(--muted)}
+  select{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0}
+  .stitle{margin:6px 0 2px;font-size:13px;font-weight:650;color:var(--text)}
+  .ssub{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .legrow{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:11.5px;color:var(--text)}
+  .sw{width:16px;height:10px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.25)}
+  .note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
+  a{color:var(--accent)}
+  .leaflet-popup-content-wrapper{background:#101b27;color:var(--text);border:1px solid var(--line);border-radius:10px}
+  .leaflet-popup-tip{background:#101b27;border:1px solid var(--line)}
+  .leaflet-popup-content{margin:10px 12px;font-size:12px;line-height:1.5}
+  .pop h4{margin:0 0 6px;font-size:13px;color:var(--accent2)}
+  .pop table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .pop td{padding:1px 0}
+  .pop td.k{color:var(--muted);padding-right:12px;white-space:nowrap}
+  .pop td.v{font-weight:600;text-align:right;white-space:nowrap}
+  .pop .quad{color:var(--muted);font-weight:400;font-size:11px}
+  .badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#0b1119}
+  /* collapsible panels (legend, storm selector) */
+  .ctl summary{list-style:none;cursor:pointer;user-select:none;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .ctl summary::-webkit-details-marker{display:none}
+  .ctl summary::before{content:'▸ ';font-size:10px}
+  .ctl[open] summary::before{content:'▾ '}
+  .ctl:not([open]) summary{margin-bottom:0}
+  /* ---- compact: narrow screens OR short (e.g. phone landscape) ---- */
+  @media (max-width:640px), (max-height:540px){
+    header{padding:8px 12px}
+    header h1{font-size:15px;line-height:1.15}
+    header p{display:none}
+    .ctl{font-size:12px;padding:9px 11px}
+    #controls{width:186px;top:8px;left:8px}
+    #controls .row{margin:6px 0}
+    #legend{left:8px;bottom:8px;width:auto;max-width:230px;max-height:36%;overflow-y:auto}
+    body.info-open #legend{display:none}   /* hide legend while the data box is open */
+    /* data box: narrow panel docked lower-right (histograms match the text width) */
+    #info{top:auto;bottom:8px;right:8px;left:auto;width:286px;max-width:calc(100vw - 16px);max-height:38%}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tropical Cyclone Track &amp; Wind-Field Explorer</h1>
+  <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is coloured by Saffir&ndash;Simpson
+     category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force) and <b>64&nbsp;kt</b> (hurricane-force)
+     wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.
+     Source: NOAA IBTrACS v04r01 &mdash; <b>all global basins</b>, using the US agency for each
+     (NHC in the Atlantic &amp; E/C Pacific, JTWC elsewhere); all storms in the record.
+     Site updated regularly, <a href="mailto:drchavas@gmail.com">email me</a> if you see a bug or there is a feature you would like to see added!</p>
+  <div class="hmeta">Data last updated <span id="lastUpd">&mdash;</span> &middot; &copy; 2026 Dan Chavas</div>
+</header>
+<div id="app">
+  <div id="left">
+    <div id="map"></div>
+    <div id="loadmsg">Loading…</div>
+    <div id="info" class="ctl"></div>
+    <details id="controls" class="ctl" open>
+      <summary>Select storm</summary>
+      <div class="row"><label>Basin</label><select id="basinSel"></select></div>
+      <div class="row"><label>Year</label><select id="yearSel"></select></div>
+      <div class="row"><label>Storm</label><select id="stormSel"></select></div>
+      <div class="stitle" id="stormTitle">&nbsp;</div>
+      <div class="ssub" id="stormSub">&nbsp;</div>
+      <div class="row" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">
+        <label>Day view</label><input id="dateSel" type="date"></div>
+      <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
+      <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day (00/06/12/18 UTC positions).</div>
+    </details>
+    <details id="legend" class="ctl" open>
+      <summary>Legend &amp; layers</summary>
+      <div id="catLegend"></div>
+      <label class="legrow" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="t34" checked><span class="sw" style="background:lightskyblue;opacity:.55"></span> Tropical storm force wind (34&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t64" checked><span class="sw" style="background:#1f6dff;opacity:.55"></span> Hurricane force wind (64&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
+      <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analysed from ~2004 on; earlier storms often lack them.</div>
+    </details>
+  </div>
+</div>
+
+<script>
+window.__initViewer = function(){
+  const DATA = window.STORMS;                 // index: { meta, clim, storms:[lightweight] }
+  const F = DATA.meta.fields;                 // field index legend
+  const ix = {}; F.forEach((k,i)=>ix[k]=i);   // name -> array index
+  { const lu=document.getElementById('lastUpd'); if(lu && DATA.meta.built) lu.textContent=DATA.meta.built; }
+
+  // per-basin track data, loaded on demand and cached (revisiting a basin = instant)
+  const basinCache = {};   // basin -> Promise<{ sid: [points...] }>
+  function ensureBasin(b){ return basinCache[b] || (basinCache[b] = window.__fetchJSON('data/basin_'+b+'.json')); }
+
+  // ---------- Saffir-Simpson colour map (matches notebook) ----------
+  const CAT = {
+    "-1":{c:"#9aa3ab", l:"TD",     ll:"Tropical depression"},
+    "0": {c:"#00bfff", l:"TS",     ll:"Tropical storm"},
+    "1": {c:"#ffe000", l:"Cat 1",  ll:"64–82 kt"},
+    "2": {c:"#ff8c00", l:"Cat 2",  ll:"83–95 kt"},
+    "3": {c:"#ff2b2b", l:"Cat 3",  ll:"96–112 kt"},
+    "4": {c:"#a30000", l:"Cat 4",  ll:"113–136 kt"},
+    "5": {c:"#9b30ff", l:"Cat 5",  ll:"≥137 kt"}
+  };
+  function catColor(s){ const k=String(s); return CAT[k] ? CAT[k].c : "#6b7682"; }
+
+  // ---------- geo helpers ----------
+  const R_EARTH = 6371.0, NM2KM = 1.852;
+  function dest(lat, lon, bearingDeg, distNm){
+    const d = distNm*NM2KM/R_EARTH;
+    const br = bearingDeg*Math.PI/180;
+    const la1 = lat*Math.PI/180, lo1 = lon*Math.PI/180;
+    const la2 = Math.asin(Math.sin(la1)*Math.cos(d) + Math.cos(la1)*Math.sin(d)*Math.cos(br));
+    const lo2 = lo1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(la1),
+                                 Math.cos(d) - Math.sin(la1)*Math.sin(la2));
+    return [la2*180/Math.PI, ((lo2*180/Math.PI + 540)%360) - 180];
+  }
+  // quadrant radii [NE,SE,SW,NW] -> smooth closed polygon. The four values are treated
+  // as the radius at each quadrant CENTRE (NE=45°, SE=135°, SW=225°, NW=315°) and the
+  // radius is interpolated continuously around the compass. This avoids the hard radial
+  // steps at the 90° quadrant boundaries that otherwise stack into a sawtooth on the swath.
+  // A 0/null quadrant pulls the curve smoothly toward the storm centre.
+  function radiusAt(b, v){          // v = [NE,SE,SW,NW] radii at 45/135/225/315
+    b = ((b % 360) + 360) % 360;
+    const x = (b - 45 + 360) % 360; // 0 at NE centre
+    const seg = Math.floor(x / 90), t = (x - seg*90) / 90;
+    return v[seg]*(1-t) + v[(seg+1)%4]*t;
+  }
+  function footprint(lat, lon, radii){
+    const v = radii.map(r => (r==null || r<0) ? 0 : r);
+    if(!v.some(x => x>0)) return null;
+    const pts = [];
+    for(let b=0; b<360; b+=3){
+      const r = radiusAt(b, v);
+      pts.push(r>0 ? dest(lat, lon, b, r) : [lat, lon]);   // dip to centre where zero
+    }
+    return pts.length>=3 ? pts : null;
+  }
+  function haversineNm(la1,lo1,la2,lo2){
+    const p=Math.PI/180, dlat=(la2-la1)*p, dlon=(lo2-lo1)*p;
+    const a=Math.sin(dlat/2)**2 + Math.cos(la1*p)*Math.cos(la2*p)*Math.sin(dlon/2)**2;
+    return 6371*2*Math.asin(Math.sqrt(a))/NM2KM;
+  }
+  function minPos(radii){ let m=Infinity; for(const v of radii){ if(v!=null && v>0 && v<m) m=v; } return m===Infinity?0:m; }
+  // Use the same wedge-to-centre footprint for the union as for the outlines/highlight,
+  // so the swath boundary matches what a clicked point shows (no chord across empty quadrants).
+  function ringOf(lat,lon,radii){ const f=footprint(lat,lon,radii); if(!f) return null; const r=f.map(p=>[p[1],p[0]]); r.push(r[0]); return [r]; }
+  // Build the polygons for a swath: each point's footprint PLUS interpolated footprints
+  // bridging consecutive points, so small/spaced-out shapes still merge into one swath.
+  function swathPolys(items){   // items[i] = {lat,lon,radii} or null
+    const polys=[];
+    for(let i=0;i<items.length;i++){
+      const a=items[i]; if(!a) continue;
+      const ra=ringOf(a.lat,a.lon,a.radii); if(ra) polys.push(ra);
+      const b=items[i+1]; if(!b) continue;
+      const dnm=haversineNm(a.lat,a.lon,b.lat,b.lon);
+      const sc=Math.min(minPos(a.radii), minPos(b.radii));   // smallest radius across the pair
+      if(sc<=0) continue;
+      // step below the radius so consecutive footprints overlap into one smooth swath
+      const N=Math.min(200, Math.max(0, Math.ceil(dnm/(sc*0.33))-1));
+      for(let k=1;k<=N;k++){
+        const t=k/(N+1);
+        const lat=a.lat+(b.lat-a.lat)*t, lon=a.lon+(b.lon-a.lon)*t;
+        const rad=a.radii.map((va,qi)=>{ const x=va==null?0:va, y=b.radii[qi]==null?0:b.radii[qi]; return x+(y-x)*t; });
+        const r=ringOf(lat,lon,rad); if(r) polys.push(r);
+      }
+    }
+    return polys;
+  }
+  // union a set of polygon-clipping polygons and draw the result into a layer group.
+  // Fast batch union first; if it throws (degenerate input), fall back to an incremental
+  // union that skips any individual polygon that breaks the clipper.
+  function unionAll(polys){
+    if(!window.polygonClipping) return null;
+    try{ return polygonClipping.union(polys[0], ...polys.slice(1)); }
+    catch(e){
+      let acc=null;
+      try{ acc = polygonClipping.union(polys[0]); }catch(_){ acc=null; }
+      for(let i=1;i<polys.length;i++){
+        try{ acc = acc ? polygonClipping.union(acc, polys[i]) : polygonClipping.union(polys[i]); }
+        catch(_){ /* skip this polygon */ }
+      }
+      return acc;
+    }
+  }
+  function drawUnion(polys, group, pane, style){
+    if(!polys.length) return;
+    const uni = unionAll(polys);
+    if(!uni) return;
+    for(const poly of uni){
+      const rings = poly.map(ring=>ring.map(pt=>[pt[1],pt[0]]));  // [x,y]->[lat,lon]
+      L.polygon(rings, Object.assign({pane, interactive:false, weight:1.6, opacity:0.9}, style)).addTo(group);
+    }
+  }
+
+  // ---------- formatting ----------
+  function fmtTime(t){ // "YYYYMMDDHHmm"
+    const y=t.slice(0,4),mo=t.slice(4,6),d=t.slice(6,8),h=t.slice(8,10),mi=t.slice(10,12);
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return {date:`${MON[+mo-1]} ${+d}, ${y}`, time:`${h}:${mi} UTC`};
+  }
+  function mean(arr){
+    const v = arr.filter(x=>x!=null);
+    if(!v.length) return null;
+    return v.reduce((a,b)=>a+b,0)/v.length;
+  }
+  const NA = '<span class="quad">N/A</span>';
+  function num(v,u){ return v==null ? NA : `${v}${u||''}`; }
+  function meanNZ(radii){ return mean((radii||[]).filter(x=> x!=null && x>0)); }
+  function radiiRow(name, radii){
+    const m = meanNZ(radii);                            // mean ignores null and 0 quadrants
+    const q = radii.map(x=> x==null ? '–' : x);
+    const mtxt = m==null ? NA : `${Math.round(m)} nm`;
+    return `<tr><td class="k">${name}</td><td class="v">${mtxt}
+      <span class="quad">[${q.join('/')}]</span></td></tr>`;
+  }
+
+  // ---------- basins ----------
+  const BASIN_NAMES = {NA:'North Atlantic', EP:'E/C Pacific', WP:'West Pacific',
+                       NI:'North Indian', SI:'South Indian', SP:'South Pacific', SA:'South Atlantic'};
+  function basinName(b){ return BASIN_NAMES[b] || b || '—'; }
+
+  // ---------- size climatology (per basin; percentile vs open-ocean hurricane points) ----------
+  const CLIM = DATA.clim || {};                          // { basin: { metric: {...} } }
+  function climFor(metric){ const b=CLIM[curBasin]; return b ? b[metric] : null; }
+  function pctOf(q, v){                                 // percentile 0-100 of v within quantiles q[0..100]
+    if(!q || v==null) return null;
+    if(v<=q[0]) return 0;
+    if(v>=q[100]) return 100;
+    for(let p=0;p<100;p++){ if(v<q[p+1]) return p + (v-q[p])/((q[p+1]-q[p])||1); }
+    return 100;
+  }
+  function ord(n){ const s=["th","st","nd","rd"], m=n%100; return n+(s[(m-20)%10]||s[m]||s[0]); }
+  function histSVG(label, metric, v, unit, color){
+    const c=climFor(metric); if(!c || v==null) return '';
+    const w=238, h=40, H=h+13, n=c.counts.length, maxc=Math.max(...c.counts), bw=w/n;
+    let bars='';
+    for(let i=0;i<n;i++){ const bh=maxc? c.counts[i]/maxc*(h-4):0;
+      bars+=`<rect x="${(i*bw).toFixed(2)}" y="${(h-bh).toFixed(2)}" width="${(bw-0.4).toFixed(2)}" height="${bh.toFixed(2)}" fill="#3a4d63"/>`; }
+    const xmax=c.x0+c.dx*n;
+    let mx=(v-c.x0)/(xmax-c.x0)*w; mx=Math.max(1, Math.min(w-1, mx));
+    const p=Math.round(pctOf(c.q, v));
+    const marker=`<line x1="${mx.toFixed(1)}" y1="0" x2="${mx.toFixed(1)}" y2="${h}" stroke="${color}" stroke-width="2"/>`;
+    const t=x=>Math.round((c.x0+(xmax-c.x0)*x)/5)*5;   // rounded axis tick value (nm)
+    const axis=`<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#2a3a4d" stroke-width="1"/>
+      <text x="1" y="${h+11}" fill="#8aa0b4" font-size="9" text-anchor="start">${t(0)}</text>
+      <text x="${w/2}" y="${h+11}" fill="#8aa0b4" font-size="9" text-anchor="middle">${t(0.5)}</text>
+      <text x="${w-1}" y="${h+11}" fill="#8aa0b4" font-size="9" text-anchor="end">${t(1)} ${unit}</text>`;
+    return `<div class="hist"><div class="histh"><b>${label}</b><span>${Math.round(v)} ${unit} · ${ord(p)} pctile</span></div>
+      <svg viewBox="0 0 ${w} ${H}" style="width:100%;height:auto;display:block">${bars}${marker}${axis}</svg></div>`;
+  }
+  function histsHtml(d){
+    const rows=[ histSVG('R34 (mean)','r34', meanNZ(d.r34),'nm','#7fc4ff'),
+                 histSVG('R64 (mean)','r64', meanNZ(d.r64),'nm','#1f6dff') ].filter(Boolean).join('');
+    if(!rows) return '';
+    const label = (DATA.meta.clim_label||'Climo:').replace('Climo:', `Climo: ${curBasin}`);
+    return `<div class="hists"><div class="histstitle">${label}</div>${rows}</div>`;
+  }
+
+  // ---------- map ----------
+  const map = L.map('map', {worldCopyJump:false}).setView([25,-70], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:10
+  }).addTo(map);
+  // panes give stable stacking: footprints below the track, R64 above R34
+  map.createPane('pgrat'); map.getPane('pgrat').style.zIndex = 250;  // graticule just above tiles
+  map.getPane('pgrat').style.pointerEvents = 'none';
+  map.createPane('p34'); map.getPane('p34').style.zIndex = 390;
+  map.createPane('p64'); map.getPane('p64').style.zIndex = 395;
+  map.createPane('prmw'); map.getPane('prmw').style.zIndex = 398;
+
+  // ---------- lat/lon graticule (redraws on pan/zoom, spacing adapts to zoom) ----------
+  const gratGroup = L.layerGroup().addTo(map);
+  function gratStep(z){ return z>=7?1 : z>=6?2 : z>=5?5 : 10; }
+  function fmtLat(v){ return Math.abs(Math.round(v*10)/10)+'°'+(v>=0?'N':'S'); }
+  function fmtLon(v){ let x=((v+180)%360+360)%360-180; return Math.abs(Math.round(x*10)/10)+'°'+(x>=0?'E':'W'); }
+  function gratLabel(lat,lon,txt,anchor){
+    return L.marker([lat,lon], {pane:'pgrat', interactive:false, icon:L.divIcon({className:'',
+      iconSize:[0,0], iconAnchor:anchor,
+      html:`<div style="color:#8aa0b4;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:0 0 3px #0b1119,0 0 3px #0b1119">${txt}</div>`})});
+  }
+  function drawGraticule(){
+    gratGroup.clearLayers();
+    const b=map.getBounds(), step=gratStep(map.getZoom());
+    const s=Math.floor(b.getSouth()/step)*step, n=Math.ceil(b.getNorth()/step)*step;
+    const w=Math.floor(b.getWest()/step)*step,  e=Math.ceil(b.getEast()/step)*step;
+    const lineStyle={pane:'pgrat', interactive:false, color:'#9fb0c0', weight:1, opacity:0.18};
+    for(let lat=s; lat<=n+1e-9; lat+=step){
+      L.polyline([[lat,b.getWest()],[lat,b.getEast()]], lineStyle).addTo(gratGroup);
+      gratLabel(lat, b.getWest(), fmtLat(lat), [-4,-2]).addTo(gratGroup);   // left edge
+    }
+    for(let lon=w; lon<=e+1e-9; lon+=step){
+      L.polyline([[b.getSouth(),lon],[b.getNorth(),lon]], lineStyle).addTo(gratGroup);
+      gratLabel(b.getSouth(), lon, fmtLon(lon), [-2,12]).addTo(gratGroup);  // bottom edge
+    }
+  }
+  map.on('moveend zoomend', drawGraticule);
+  drawGraticule();
+
+  let layer = L.layerGroup().addTo(map);     // track, points, labels
+  let dateLayer = L.layerGroup().addTo(map); // "day view" markers/labels
+  let dayMode = false;
+  let r34Group = L.layerGroup();             // 34 kt footprints (toggleable)
+  let r64Group = L.layerGroup();             // 64 kt footprints (toggleable)
+  let rmwGroup = L.layerGroup();             // Rmax circles (toggleable)
+  const t34 = document.getElementById('t34');
+  const t64 = document.getElementById('t64');
+  const trmw = document.getElementById('trmw');
+  const infoBox = document.getElementById('info');
+  let curPts = null, curSel = null, curAtcf = '', curBasin = '';   // current storm state
+  map.createPane('phl'); map.getPane('phl').style.zIndex = 450;  // clicked-point radii on top
+  const hlGroup = L.layerGroup().addTo(map);
+  function applyToggles(){
+    if(t34.checked) r34Group.addTo(map); else map.removeLayer(r34Group);
+    if(t64.checked) r64Group.addTo(map); else map.removeLayer(r64Group);
+    if(trmw.checked) rmwGroup.addTo(map); else map.removeLayer(rmwGroup);
+    if(curSel!=null) highlight(curSel);   // keep the clicked-point outlines in sync
+  }
+  // bold, filled outlines for the clicked timestep's radii (drawn on top, respect toggles)
+  function highlight(i){
+    hlGroup.clearLayers();
+    if(i==null || !curPts) return;
+    const d = pointData(curPts[i]);
+    // bright yellow X marking the selected track point (fixed size, inside the dot)
+    L.marker([d.lat,d.lon], {pane:'phl', interactive:false, icon:L.divIcon({
+      className:'', iconSize:[10,10], iconAnchor:[5,5],
+      html:'<svg width="10" height="10" viewBox="0 0 10 10" style="display:block"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#ffe000" stroke-width="2" stroke-linecap="round"/></svg>'
+    })}).addTo(hlGroup);
+    if(t34.checked){ const f=footprint(d.lat,d.lon,d.r34);
+      if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#7fc4ff', weight:6, opacity:1,
+        fillColor:'lightskyblue', fillOpacity:0.22}).addTo(hlGroup); }
+    if(t64.checked){ const f=footprint(d.lat,d.lon,d.r64);
+      if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#1f6dff', weight:6.4, opacity:1,
+        fillColor:'#1f6dff', fillOpacity:0.30}).addTo(hlGroup); }
+    if(trmw.checked && d.rmw!=null && d.rmw>0){
+      L.circle([d.lat,d.lon], {pane:'phl', interactive:false, radius:d.rmw*1852, color:'#ff3b3b',
+        weight:6, opacity:1, fillColor:'#ff6b6b', fillOpacity:0.22}).addTo(hlGroup); }
+  }
+  function selectPoint(i, d){
+    curSel = i;
+    highlight(i);
+    infoBox.innerHTML = '<button class="infoclose" title="Close">&times;</button>' + popupHtml(d);
+    infoBox.querySelector('.infoclose').addEventListener('click', closeInfo);
+    infoBox.style.display = 'block';
+    document.body.classList.add('info-open');
+  }
+  function closeInfo(){ curSel = null; hlGroup.clearLayers(); infoBox.style.display='none'; document.body.classList.remove('info-open'); }
+  t34.addEventListener('change', applyToggles);
+  t64.addEventListener('change', applyToggles);
+  trmw.addEventListener('change', applyToggles);
+  applyToggles();   // put the (empty) radii groups on the map once
+
+  function pointData(p){
+    const r34=[p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]];
+    const r50=[p[ix.r50ne],p[ix.r50se],p[ix.r50sw],p[ix.r50nw]];
+    const r64=[p[ix.r64ne],p[ix.r64se],p[ix.r64sw],p[ix.r64nw]];
+    return {lat:p[ix.lat],lon:p[ix.lon],vmax:p[ix.vmax],pmin:p[ix.pmin],
+            sshs:p[ix.sshs],rmw:p[ix.rmw],spd:p[ix.spd],t:p[ix.t],r34,r50,r64,
+            nat:p[ix.nat],lf:p[ix.lf],dir:p[ix.dir],poci:p[ix.poci],roci:p[ix.roci],d2l:p[ix.d2l]};
+  }
+  // motion direction (deg, toward which the storm moves) -> 16-point compass
+  function compass(deg){
+    if(deg==null) return null;
+    const pts=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+    return pts[Math.round(((deg%360)/22.5))%16];
+  }
+  // IBTrACS NATURE code -> readable designation
+  const NATURE = {TS:"Tropical cyclone", ET:"Extratropical cyclone", SS:"Subtropical cyclone",
+                  DS:"Disturbance", MX:"Mixture", NR:"Not reported"};
+  function natLabel(n){ return NATURE[n] || (n || "—"); }
+
+  function popupHtml(d){
+    const ft=fmtTime(d.t);
+    const cat = CAT[String(d.sshs)];
+    const badge = cat ? `<span class="badge" style="background:${cat.c}">${cat.l}</span>` : '';
+    return `<div class="pop"><h4>${ft.date} &nbsp; ${ft.time} ${badge}</h4>
+      <table>
+        <tr><td class="k">Type</td><td class="v">${natLabel(d.nat)}</td></tr>
+        <tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;N</td></tr>
+        <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr>
+        <tr><td class="k">Vmax</td><td class="v">${num(d.vmax,' kt')}</td></tr>
+        <tr><td class="k">Pmin</td><td class="v">${num(d.pmin,' mb')}</td></tr>
+        <tr><td class="k">Rmax</td><td class="v">${num(d.rmw,' nm')}</td></tr>
+        ${radiiRow('R64', d.r64)}
+        ${radiiRow('R50', d.r50)}
+        ${radiiRow('R34', d.r34)}
+        <tr><td class="k">Translation</td><td class="v">${num(d.spd,' kt')}</td></tr>
+        <tr><td class="k">Motion dir</td><td class="v">${d.dir==null?NA:`${compass(d.dir)} <span class="quad">(${d.dir}&deg;)</span>`}</td></tr>
+        <tr><td class="k">POCI</td><td class="v">${num(d.poci,' mb')}</td></tr>
+        <tr><td class="k">ROCI</td><td class="v">${num(d.roci,' nm')}</td></tr>
+        <tr><td class="k">Dist. to land</td><td class="v">${d.lf?'<span style="color:#ff5252;font-weight:700">LANDFALL</span>':(d.d2l==null?NA:(d.d2l===0?'<span style="color:#ff7b7b">over land</span>':`${d.d2l} km`))}</td></tr>
+        <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
+      </table>
+      <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
+      ${histsHtml(d)}</div>`;
+  }
+
+  let renderToken = 0;
+  async function renderStorm(storm){
+    const token = ++renderToken;                 // guard against out-of-order async renders
+    if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
+    let bdata;
+    try{ bdata = await ensureBasin(storm.basin); }
+    catch(e){ console.error(e); window.__loadmsg.show('Could not load '+basinName(storm.basin)+' data.'); return; }
+    if(token !== renderToken) return;            // a newer selection superseded this one
+    window.__loadmsg.hide();
+    layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
+    hlGroup.clearLayers(); curSel = null;
+    dateLayer.clearLayers(); dayMode = false;          // leaving day view
+    dateSub.style.display='none'; dateSel.value='';
+    infoBox.style.display='none'; document.body.classList.remove('info-open');
+    const pts = bdata[storm.sid] || [];
+    curPts = pts;
+    curAtcf = storm.atcf || '';
+    curBasin = storm.basin || '';
+    const latlngs = pts.map(p=>[p[ix.lat], p[ix.lon]]);
+
+    // coloured track segments (colour by category of segment's first point)
+    for(let i=0;i<latlngs.length-1;i++){
+      L.polyline([latlngs[i], latlngs[i+1]], {
+        color:catColor(pts[i][ix.sshs]), weight:3, opacity:0.95
+      }).addTo(layer);
+    }
+
+    // clickable points
+    for(let i=0;i<pts.length;i++){
+      const d = pointData(pts[i]);
+      const m = L.circleMarker([d.lat,d.lon], {
+        radius:5, color:'#0b1119', weight:0.8,
+        fillColor:catColor(d.sshs), fillOpacity:1
+      }).addTo(layer);
+      m.on('click', ()=> selectPoint(i, d));
+      m.on('mouseover', function(){ this.setStyle({radius:7}); });
+      m.on('mouseout',  function(){ this.setStyle({radius:5}); });
+    }
+
+    // day labels at 00 UTC
+    for(const p of pts){
+      const t = p[ix.t];
+      if(t.slice(8,12)==='0000'){
+        const ft=fmtTime(t);
+        L.marker([p[ix.lat], p[ix.lon]], {interactive:false, icon:L.divIcon({
+          className:'', html:`<div style="color:#cdd9e5;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${ft.date.replace(', '+t.slice(0,4),'')}</div>`,
+          iconSize:[0,0]})}).addTo(layer);
+      }
+    }
+
+    if(latlngs.length){
+      map.fitBounds(L.latLngBounds(latlngs).pad(0.35), {maxZoom:7});
+    }
+
+    // Wind-radii swaths (drawn last so a failure here can never hide the track).
+    // Each radius is ONE coherent swath: union of every timestep's area plus interpolated
+    // bridges. Rmax = a circle (equal radius in all quadrants).
+    const r34items=[], r64items=[], rmwitems=[];
+    for(const p of pts){
+      const d = pointData(p);
+      r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r34} : null);
+      r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r64} : null);
+      rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon:d.lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
+    }
+    try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
+    try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
+    try{ drawUnion(swathPolys(rmwitems), rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}); }catch(e){ console.error('Rmax swath failed', e); }
+
+    // peak intensity for subtitle
+    let peak=-99, peakv=null;
+    for(const p of pts){ const v=p[ix.vmax]; if(v!=null && v>peak){peak=v;} }
+    const cats = pts.map(p=>p[ix.sshs]).filter(x=>x!=null);
+    const maxcat = cats.length? Math.max(...cats): null;
+    const catName = (maxcat!=null && CAT[String(maxcat)]) ? CAT[String(maxcat)].l : '—';
+    document.getElementById('stormTitle').textContent = `${titleCase(storm.name)} (${storm.year})`;
+    document.getElementById('stormSub').innerHTML =
+      `${basinName(storm.basin)} &middot; ${pts.length} pts &middot; peak ${peak>-99? peak+' kt':'—'} (${catName})`;
+  }
+
+  function titleCase(s){ return s.replace(/\w\S*/g, t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()); }
+
+  // ---------- dropdowns (Basin -> Year -> Storm) ----------
+  const basinSel = document.getElementById('basinSel');
+  const yearSel  = document.getElementById('yearSel');
+  const stormSel = document.getElementById('stormSel');
+
+  const opYear = Math.max(...DATA.storms.map(s=>s.year||0));   // newest = operational
+
+  // Basin options: "All" + basins present in the data (by readable name)
+  const presentBasins = [...new Set(DATA.storms.map(s=>s.basin).filter(Boolean))]
+    .sort((a,b)=> basinName(a)<basinName(b)?-1:1);
+  { const o=document.createElement('option'); o.value='ALL'; o.textContent='All basins'; basinSel.appendChild(o); }
+  presentBasins.forEach(b=>{ const o=document.createElement('option'); o.value=b; o.textContent=basinName(b); basinSel.appendChild(o); });
+
+  const inBasin = (s,basin) => basin==='ALL' || s.basin===basin;
+
+  function populateYears(basin, keepYear){
+    const ys = [...new Set(DATA.storms.filter(s=>inBasin(s,basin) && s.year!=null).map(s=>s.year))]
+      .sort((a,b)=>b-a);
+    yearSel.innerHTML='';
+    ys.forEach(y=>{ const o=document.createElement('option'); o.value=y;
+      o.textContent=(y===opYear? y+' (operational)':y); yearSel.appendChild(o); });
+    yearSel.value = (keepYear!=null && ys.includes(keepYear)) ? keepYear : ys[0];
+    return ys;
+  }
+  function populateStorms(basin, year, selectIdx){
+    const list = DATA.storms.map((s,i)=>i)
+      .filter(i=> inBasin(DATA.storms[i],basin) && DATA.storms[i].year===year)
+      .sort((ia,ib)=>{ const a=DATA.storms[ia], b=DATA.storms[ib];
+        return (a.basin===b.basin ? (a.name<b.name?-1:a.name>b.name?1:0) : (a.basin<b.basin?-1:1)); });
+    stormSel.innerHTML='';
+    list.forEach(i=>{
+      const s=DATA.storms[i];
+      const nm = s.name && s.name!=='UNNAMED' ? titleCase(s.name) : `Unnamed (${s.sid})`;
+      const o=document.createElement('option'); o.value=i;
+      o.textContent = basin==='ALL' ? `${nm} · ${s.basin}` : nm;   // show basin when mixed
+      stormSel.appendChild(o);
+    });
+    stormSel.value = (selectIdx!=null && list.includes(selectIdx)) ? selectIdx : list[0];
+    return renderStorm(DATA.storms[+stormSel.value]);
+  }
+
+  basinSel.addEventListener('change', ()=>{ populateYears(basinSel.value, +yearSel.value); populateStorms(basinSel.value, +yearSel.value); });
+  yearSel.addEventListener('change', ()=> populateStorms(basinSel.value, +yearSel.value));
+  stormSel.addEventListener('change', ()=> renderStorm(DATA.storms[+stormSel.value]));
+
+  // ---------- day view: all storms active on a chosen date ----------
+  const dateSel = document.getElementById('dateSel');
+  const dateSub = document.getElementById('dateSub');
+  { // constrain the picker to the data's date span
+    const mn=String(Math.min(...DATA.storms.map(s=>s.t0))), mx=String(Math.max(...DATA.storms.map(s=>s.t1)));
+    dateSel.min = mn.slice(0,4)+'-'+mn.slice(4,6)+'-'+mn.slice(6,8);
+    dateSel.max = mx.slice(0,4)+'-'+mx.slice(4,6)+'-'+mx.slice(6,8);
+  }
+  const SYN = ["00","06","12","18"];
+
+  function selectStormBySid(sid){
+    const i = DATA.storms.findIndex(s=>s.sid===sid); if(i<0) return;
+    const s = DATA.storms[i];
+    basinSel.value = presentBasins.includes(s.basin) ? s.basin : 'ALL';
+    populateYears(basinSel.value, s.year);
+    populateStorms(basinSel.value, s.year, i);   // renders the storm + exits day view
+  }
+  function showDayInfo(storm, p){
+    const d=pointData(p), ft=fmtTime(d.t), cat=CAT[String(d.sshs)];
+    const badge = cat ? `<span class="badge" style="background:${cat.c}">${cat.l}</span>` : '';
+    infoBox.innerHTML = '<button class="infoclose" title="Close">&times;</button>' +
+      `<div class="pop"><h4>${titleCase(storm.name)} (${storm.year}) ${badge}</h4>
+        <table>
+          <tr><td class="k">Time</td><td class="v">${ft.date} &nbsp; ${ft.time}</td></tr>
+          <tr><td class="k">Basin</td><td class="v">${basinName(storm.basin)}</td></tr>
+          <tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;N</td></tr>
+          <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr>
+          <tr><td class="k">Vmax</td><td class="v">${num(d.vmax,' kt')}</td></tr>
+          <tr><td class="k">Pmin</td><td class="v">${num(d.pmin,' mb')}</td></tr>
+        </table>
+        <button class="viewtrack" style="margin-top:8px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">View full track ▸</button>
+      </div>`;
+    infoBox.querySelector('.infoclose').addEventListener('click', closeInfo);
+    infoBox.querySelector('.viewtrack').addEventListener('click', ()=> selectStormBySid(storm.sid));
+    infoBox.style.display='block'; document.body.classList.add('info-open');
+  }
+  async function showDay(dateStr){
+    const ymd = dateStr.replace(/-/g,''), di = +ymd;
+    const active = DATA.storms.filter(s => s.t0<=di && di<=s.t1);
+    const basins = [...new Set(active.map(s=>s.basin))];
+    const token = ++renderToken;
+    if(basins.some(b=>!basinCache[b])) window.__loadmsg.show('Loading storms for '+dateStr+'…');
+    let bd;
+    try{ bd = Object.fromEntries(await Promise.all(basins.map(async b=>[b, await ensureBasin(b)]))); }
+    catch(e){ console.error(e); window.__loadmsg.show('Could not load data for '+dateStr+'.'); return; }
+    if(token !== renderToken) return;
+    window.__loadmsg.hide();
+    layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
+    hlGroup.clearLayers(); dateLayer.clearLayers();
+    infoBox.style.display='none'; document.body.classList.remove('info-open');
+    curPts=null; curSel=null; dayMode=true;
+
+    const allLL=[]; let count=0;
+    active.forEach(s=>{
+      const pts=(bd[s.basin]||{})[s.sid]; if(!pts) return;
+      const dayPts=pts.filter(p=> p[ix.t].slice(0,8)===ymd && SYN.includes(p[ix.t].slice(8,10)));
+      if(!dayPts.length) return;
+      count++;
+      const ll=dayPts.map(p=>[p[ix.lat],p[ix.lon]]);
+      if(ll.length>1) L.polyline(ll,{color:'#cdd9e5',weight:1.5,opacity:0.45}).addTo(dateLayer);
+      dayPts.forEach(p=>{
+        const d=pointData(p); allLL.push([d.lat,d.lon]);
+        const m=L.circleMarker([d.lat,d.lon],{radius:5,color:'#0b1119',weight:0.8,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
+        m.on('click', ()=> showDayInfo(s,p));
+        m.on('mouseover',function(){this.setStyle({radius:7});}); m.on('mouseout',function(){this.setStyle({radius:5});});
+      });
+      const p0=dayPts[0];
+      L.marker([p0[ix.lat],p0[ix.lon]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
+        html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
+    });
+    if(allLL.length) map.fitBounds(L.latLngBounds(allLL).pad(0.4));
+    document.getElementById('stormTitle').textContent = `Day view — ${fmtTime(ymd+'0000').date}`;
+    document.getElementById('stormSub').innerHTML = '&nbsp;';
+    dateSub.style.display='block';
+    dateSub.innerHTML = count ? `<b>${count}</b> tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
+                              : 'No storms on this date';
+  }
+  dateSel.addEventListener('change', ()=>{
+    if(dateSel.value) showDay(dateSel.value);
+    else renderStorm(DATA.storms[+stormSel.value]);   // cleared -> back to the selected storm
+  });
+
+  // ---------- category legend ----------
+  const cl = document.getElementById('catLegend');
+  [["-1"],["0"],["1"],["2"],["3"],["4"],["5"]].forEach(([k])=>{
+    const c=CAT[k];
+    const row=document.createElement('div'); row.className='legrow';
+    row.innerHTML=`<span class="sw" style="background:${c.c}"></span><b style="width:40px;display:inline-block">${c.l}</b><span class="quad">${c.ll}</span>`;
+    cl.appendChild(row);
+  });
+  // compact = narrow OR short viewport (phone portrait or landscape)
+  const compact = window.innerWidth <= 640 || window.innerHeight <= 540;
+  // legend stays open by default (the HTML sets <details open>)
+
+  // ---------- default selection: Helene 2024 (North Atlantic) if present, else newest ----------
+  let defBasin='ALL', defYear=opYear, defIdx=null;
+  for(let i=0;i<DATA.storms.length;i++){
+    if(DATA.storms[i].name.toLowerCase()==='helene' && DATA.storms[i].year===2024){
+      defBasin=DATA.storms[i].basin||'ALL'; defYear=2024; defIdx=i; break; }
+  }
+  basinSel.value = presentBasins.includes(defBasin) ? defBasin : 'ALL';
+  populateYears(basinSel.value, defYear);
+  // render the default storm (loads its basin file), then auto-select the landfall point
+  populateStorms(basinSel.value, defYear, defIdx).then(()=>{
+    // auto-select Helene's 03:10 UTC landfall point on first load (desktop only —
+    // on phones the data sheet would cover the map, so leave the track fully visible)
+    if(defIdx!=null && curPts && !compact){
+      const li = curPts.findIndex(p=>p[ix.t]==='202409270310');
+      if(li>=0) selectPoint(li, pointData(curPts[li]));
+    }
+  });
+};
+</script>
+<script>
+// Data is split into a small index + one file per basin. The host (GitHub Pages / Fastly)
+// gzip/brotli-compresses these JSON files on the fly, so we just fetch().json(). Basins are
+// cached in memory once loaded (revisiting a basin is instant).
+(function(){
+  const lm = document.getElementById('loadmsg');
+  window.__loadmsg = { show(t){ lm.textContent=t; lm.style.display='flex'; }, hide(){ lm.style.display='none'; } };
+  window.__fetchJSON = async function(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+    return r.json();
+  };
+  (async function(){
+    try{
+      window.__loadmsg.show('Loading storm index…');
+      window.STORMS = await window.__fetchJSON('data/index.json');
+      window.__initViewer();   // builds the map + dropdowns; the default render loads its basin
+    }catch(e){
+      console.error(e);
+      window.__loadmsg.show('Could not load storm data: '+e.message+'. Try reloading or a newer browser.');
+    }
+  })();
+})();
+</script>
+</body>
+</html>
