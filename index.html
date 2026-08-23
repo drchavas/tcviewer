@@ -624,6 +624,18 @@ window.__initViewer = function(){
       if(!dayPts.length) return;
       count++;
       const trackLL=pts.map(p=>[p[ix.lat],p[ix.lon]]);
+      // wind-radii swaths for the full track — same build as the single-storm view
+      // (added to the toggleable r34/r64/rmw groups, so the legend checkboxes control them)
+      const r34items=[], r64items=[], rmwitems=[];
+      for(const p of pts){
+        const d=pointData(p);
+        r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r34} : null);
+        r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r64} : null);
+        rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon:d.lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
+      }
+      try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
+      try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
+      try{ drawUnion(swathPolys(rmwitems), rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}); }catch(e){ console.error('Rmax swath failed', e); }
       // full track rendered exactly like the single-storm view — coloured segments…
       for(let i=0;i<trackLL.length-1;i++){
         L.polyline([trackLL[i],trackLL[i+1]],{color:catColor(pts[i][ix.sshs]),weight:3,opacity:0.95}).addTo(dateLayer);
