@@ -761,11 +761,17 @@ window.__initViewer = function(){
   populateYears(basinSel.value, defYear);
   // render the default storm (loads its basin file), then auto-select the landfall point
   populateStorms(basinSel.value, defYear, defIdx).then(()=>{
-    // auto-select Helene's 03:10 UTC landfall point on first load (desktop only —
-    // on phones the data sheet would cover the map, so leave the track fully visible)
-    if(defIdx!=null && curPts && !compact){
-      const li = curPts.findIndex(p=>p[ix.t]==='202409270310');
-      if(li>=0) selectPoint(li, pointData(curPts[li]));
+    if(defIdx!=null && curPts){
+      // Helene's 03:10 UTC landfall point (fall back to its first landfall timestep)
+      let li = curPts.findIndex(p=>p[ix.t]==='202409270310');
+      if(li<0) li = curPts.findIndex(p=>p[ix.lf]===1);
+      if(li>=0){
+        const lt = curPts[li][ix.t];
+        // Day in History defaults to Helene's landfall day (until the user changes it)
+        ySel.value=+lt.slice(0,4); mSel.value=+lt.slice(4,6); dSel.value=+lt.slice(6,8);
+        // desktop: also open that point's data sheet (on phones the sheet would cover the map)
+        if(!compact) selectPoint(li, pointData(curPts[li]));
+      }
     }
   });
 };
