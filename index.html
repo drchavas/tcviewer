@@ -49,6 +49,11 @@
   .row{display:flex;align-items:center;gap:8px;margin:8px 0}
   .row label{flex:0 0 46px;color:var(--muted)}
   select{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0}
+  .dateparts{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+  .dateparts .sep{color:var(--muted);font-size:12.5px}
+  .dp{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 4px;font-size:12.5px;text-align:center;color-scheme:dark}
+  .dp#ySel{width:52px} .dp#mSel,.dp#dSel{width:40px}
+  .dp::-webkit-inner-spin-button,.dp::-webkit-outer-spin-button{opacity:1;height:auto}
   .stitle{margin:6px 0 2px;font-size:13px;font-weight:650;color:var(--text)}
   .ssub{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
   .legrow{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:11.5px;color:var(--text)}
@@ -110,7 +115,15 @@
       <div class="stitle" id="stormTitle">&nbsp;</div>
       <div class="ssub" id="stormSub">&nbsp;</div>
       <div class="row" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">
-        <label>Day view</label><input id="dateSel" type="date"></div>
+        <label>Day view</label>
+        <span class="dateparts">
+          <input id="ySel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
+          <span class="sep">-</span>
+          <input id="mSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
+          <span class="sep">-</span>
+          <input id="dSel" class="dp" type="number" step="1" min="1" max="31" placeholder="DD" aria-label="Day">
+        </span></div>
+      <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
       <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
       <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
     </details>
@@ -341,6 +354,17 @@ window.__initViewer = function(){
   map.on('moveend zoomend', drawGraticule);
   drawGraticule();
 
+  // ---------- view lock ----------
+  // The map auto-frames selections until the user takes control. The first time a date
+  // is entered we snap to a global view; after that (or after any manual zoom/pan) the
+  // domain stays put, so changing date/storm no longer moves the map. "Zoom to global"
+  // resets it. Programmatic moves are guarded so they don't count as the user's zoom.
+  const WORLD = [[-58,-179],[76,179]];
+  let viewLocked = false, progMove = false;
+  function progFit(fn){ progMove=true; fn(); setTimeout(()=>{ progMove=false; }, 60); }
+  function goGlobal(){ viewLocked=true; progFit(()=> map.fitBounds(WORLD, {animate:false})); }
+  map.on('moveend', ()=>{ if(progMove){ progMove=false; return; } viewLocked=true; });  // real user move → lock
+
   let layer = L.layerGroup().addTo(map);     // track, points, labels
   let dateLayer = L.layerGroup().addTo(map); // "day view" markers/labels
   let dayMode = false;
@@ -489,8 +513,8 @@ window.__initViewer = function(){
       }
     }
 
-    if(latlngs.length){
-      map.fitBounds(L.latLngBounds(latlngs).pad(0.35), {maxZoom:7});
+    if(latlngs.length && !viewLocked){
+      progFit(()=> map.fitBounds(L.latLngBounds(latlngs).pad(0.35), {maxZoom:7, animate:false}));
     }
 
     // Wind-radii swaths (drawn last so a failure here can never hide the track).
@@ -566,13 +590,21 @@ window.__initViewer = function(){
   stormSel.addEventListener('change', ()=> renderStorm(DATA.storms[+stormSel.value]));
 
   // ---------- day view: all storms active on a chosen date ----------
-  const dateSel = document.getElementById('dateSel');
+  const ySel=document.getElementById('ySel'), mSel=document.getElementById('mSel'), dSel=document.getElementById('dSel');
   const dateSub = document.getElementById('dateSub');
-  { // constrain the picker to the data's date span
-    const mn=String(Math.min(...DATA.storms.map(s=>s.t0))), mx=String(Math.max(...DATA.storms.map(s=>s.t1)));
-    dateSel.min = mn.slice(0,4)+'-'+mn.slice(4,6)+'-'+mn.slice(6,8);
-    dateSel.max = mx.slice(0,4)+'-'+mx.slice(4,6)+'-'+mx.slice(6,8);
-  }
+  const pad2 = n => String(n).padStart(2,'0');
+  const Y_MIN = Math.floor(Math.min(...DATA.storms.map(s=>s.t0))/10000);
+  const Y_MAX = Math.floor(Math.max(...DATA.storms.map(s=>s.t1))/10000);
+  ySel.min=Y_MIN; ySel.max=Y_MAX;
+  // the three number boxes behave like one date field: value is "YYYY-MM-DD" or ""
+  const dateSel = {
+    get value(){
+      if(ySel.value===''||mSel.value===''||dSel.value==='') return '';
+      const y=+ySel.value, m=+mSel.value, d=+dSel.value;
+      return (Number.isFinite(y)&&Number.isFinite(m)&&Number.isFinite(d)) ? `${y}-${pad2(m)}-${pad2(d)}` : '';
+    },
+    set value(v){ if(!v){ ySel.value=''; mSel.value=''; dSel.value=''; } }
+  };
   const SYN = ["00","06","12","18"];
 
   function selectStormBySid(sid){
@@ -659,17 +691,30 @@ window.__initViewer = function(){
       L.marker([p0[ix.lat],p0[ix.lon]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
         html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
     });
-    if(allLL.length) map.fitBounds(L.latLngBounds(allLL).pad(0.2));
+    if(!viewLocked) goGlobal();   // first date entered → snap to global; locks the domain thereafter
     document.getElementById('stormTitle').textContent = `Day view — ${fmtTime(ymd+'0000').date}`;
     document.getElementById('stormSub').innerHTML = '&nbsp;';
     dateSub.style.display='block';
     dateSub.innerHTML = count ? `<b>${count}</b> tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
                               : 'No storms on this date';
   }
-  dateSel.addEventListener('change', ()=>{
-    if(dateSel.value) showDay(dateSel.value);
-    else renderStorm(DATA.storms[+stormSel.value]);   // cleared -> back to the selected storm
-  });
+  // Any of the three boxes changing (typed or stepped) re-plots. Day/month overflow
+  // rolls over naturally (e.g. Aug 31 + one day → Sep 1); the year is clamped to the data.
+  function onDateChange(){
+    const y=ySel.value, m=mSel.value, d=dSel.value;
+    if(y===''&&m===''&&d===''){ renderStorm(DATA.storms[+stormSel.value]); return; }  // all cleared → storm
+    if(y===''||m===''||d==='') return;                                                // wait for all three
+    let yi=Math.round(+y), mi=Math.round(+m), di=Math.round(+d);
+    if(!Number.isFinite(yi)||!Number.isFinite(mi)||!Number.isFinite(di)) return;
+    // normalise month/day overflow with a dummy year, then carry any year change onto yi
+    const base=new Date(Date.UTC(2000, mi-1, di));
+    yi += base.getUTCFullYear()-2000; mi=base.getUTCMonth()+1; di=base.getUTCDate();
+    yi=Math.max(Y_MIN, Math.min(Y_MAX, yi));
+    ySel.value=yi; mSel.value=mi; dSel.value=di;                                       // reflect normalised values
+    showDay(`${yi}-${pad2(mi)}-${pad2(di)}`);
+  }
+  [ySel,mSel,dSel].forEach(el=> el.addEventListener('change', onDateChange));
+  document.getElementById('globalBtn').addEventListener('click', goGlobal);
 
   // ---------- category legend ----------
   const cl = document.getElementById('catLegend');
