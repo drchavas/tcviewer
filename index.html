@@ -459,6 +459,16 @@ window.__initViewer = function(){
   }
   const MON3=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   function shortDate(ep){ const d=new Date(ep); return MON3[d.getUTCMonth()]+' '+d.getUTCDate(); }
+  // Size readout doubling as a colour key: coloured R34/R64/Rmax labels, with the
+  // selected time's values appended when a point (p) is given.
+  function sizeVals(p){
+    const defs = [
+      ['R34', p && meanNZ([p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]]), '#7fc4ff'],
+      ['R64', p && meanNZ([p[ix.r64ne],p[ix.r64se],p[ix.r64sw],p[ix.r64nw]]), '#1f6dff'],
+      ['Rmax', p ? ((p[ix.rmw]!=null && p[ix.rmw]>0) ? p[ix.rmw] : null) : null, '#ff6b6b']
+    ];
+    return defs.map(([lab,v,c])=>`<b style="color:${c};font-weight:600">${lab}</b>${(v!=null&&isFinite(v))?' '+Math.round(v):''}`).join('  ');
+  }
   function buildTS(pts){
     tsState=null; tsEl.innerHTML='';
     if(!pts || pts.length<2 || isCompact()){ tsEl.style.display='none'; return; }
@@ -475,7 +485,6 @@ window.__initViewer = function(){
       {key:'pmin', title:'Pmin', unit:'mb', lines:[{vals:pts.map(p=>p[ix.pmin]), color:'#5ec8ff'}]},
       {key:'size', title:'Size', unit:'nm', wide:true, lines:[
         {vals:pts.map(p=>meanNZ([p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]])), color:'#7fc4ff', label:'R34'},
-        {vals:pts.map(p=>meanNZ([p[ix.r50ne],p[ix.r50se],p[ix.r50sw],p[ix.r50nw]])), color:'#3f86e0', label:'R50'},
         {vals:pts.map(p=>meanNZ([p[ix.r64ne],p[ix.r64se],p[ix.r64sw],p[ix.r64nw]])), color:'#1f6dff', label:'R64'},
         {vals:pts.map(p=> (p[ix.rmw]!=null && p[ix.rmw]>0) ? p[ix.rmw] : null), color:'#ff6b6b', label:'Rmax'}
       ]}
@@ -498,11 +507,11 @@ window.__initViewer = function(){
         if(d) paths+=`<path d="${d}" fill="none" stroke="${L.color}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
       }
       const mark=`<line class="tsmark" x1="-9" y1="0" x2="-9" y2="${VBH}" stroke="#ffe000" stroke-width="1.4" vector-effect="non-scaling-stroke" style="display:none"/>`;
-      const legend = s.lines.length>1 ? `<span class="tsleg">${s.lines.map(L=>`<b style="color:${L.color}">■</b>${L.label}`).join(' ')}</span>` : '';
       const svg=`<svg class="tssvg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">${xgrid}${ygrid}${paths}${mark}</svg>`;
       const nodata = has ? '' : '<div class="tsnodata">no size data</div>';
+      const initVal = s.key==='size' ? '<span class="tsleg">'+sizeVals(null)+'</span>' : '';   // colour key until a point is picked
       html+=`<div class="tspanel${s.wide?' wide':''}" data-key="${s.key}">
-        <div class="tstitle">${s.title} <span class="tsunit">${s.unit}</span><span class="tsval"></span>${legend}</div>
+        <div class="tstitle">${s.title} <span class="tsunit">${s.unit}</span><span class="tsval">${initVal}</span></div>
         <div class="tsplot">${svg}${ylabels}${nodata}</div>
         <div class="tsxaxis">${xlabels}</div>
       </div>`;
@@ -529,11 +538,10 @@ window.__initViewer = function(){
     const p = show ? tsState.pts[i] : null;
     tsEl.querySelectorAll('.tspanel').forEach(pan=>{
       const el=pan.querySelector('.tsval'); if(!el) return;
-      if(!show){ el.textContent=''; return; }
       const k=pan.getAttribute('data-key');
-      if(k==='vmax') el.textContent = p[ix.vmax]!=null ? ' · '+p[ix.vmax] : '';
-      else if(k==='pmin') el.textContent = p[ix.pmin]!=null ? ' · '+p[ix.pmin] : '';
-      else if(k==='size'){ const r=meanNZ([p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]]); el.textContent = r!=null ? ' · R34 '+Math.round(r) : ''; }
+      if(k==='vmax') el.textContent = (show && p[ix.vmax]!=null) ? ' · '+p[ix.vmax] : '';
+      else if(k==='pmin') el.textContent = (show && p[ix.pmin]!=null) ? ' · '+p[ix.pmin] : '';
+      else if(k==='size') el.innerHTML = '<span class="tsleg">'+sizeVals(p)+'</span>';   // colour key, plus values when a point is picked
     });
   }
   t34.addEventListener('change', applyToggles);
