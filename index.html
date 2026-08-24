@@ -28,8 +28,25 @@
   header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1000px;line-height:1.5}
   header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
   #app{display:flex;flex:1 1 auto;min-height:0}
-  #left{flex:1 1 100%;position:relative;min-width:0}
+  #left{flex:1 1 100%;min-width:0;display:flex;flex-direction:column}
+  #mapwrap{position:relative;flex:1 1 auto;min-height:0}
   #map{position:absolute;inset:0;background:#0b1119}
+  /* lifecycle time series strip (single-storm view) */
+  #timeseries{flex:0 0 auto;height:162px;background:var(--panel);border-top:1px solid var(--line);display:none}
+  .tsrow{display:flex;gap:14px;padding:8px 14px 6px;height:100%}
+  .tspanel{flex:1 1 0;display:flex;flex-direction:column;min-width:0}
+  .tspanel.wide{flex:1.6 1 0}
+  .tstitle{font-size:11px;color:var(--muted);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tstitle .tsunit{font-size:10px}
+  .tstitle .tsval{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;margin-left:2px}
+  .tsleg{margin-left:6px;font-size:10px;color:var(--muted)}
+  .tsleg b{font-weight:400}
+  .tsplot{position:relative;flex:1 1 auto;min-height:0;background:#0e1722;border:1px solid var(--line);border-radius:4px;overflow:hidden;cursor:crosshair}
+  .tssvg{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .tsymax,.tsymin{position:absolute;left:3px;font-size:9px;color:#8aa0b4;font-variant-numeric:tabular-nums;pointer-events:none;background:rgba(14,23,34,.55);padding:0 2px;border-radius:2px}
+  .tsymax{top:1px}.tsymin{bottom:1px}
+  .tsnodata{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
+  .tsx{display:flex;justify-content:space-between;font-size:9px;color:#8aa0b4;margin-top:2px}
   #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
            text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
   .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
@@ -88,6 +105,7 @@
     body.info-open #legend{display:none}   /* hide legend while the data box is open */
     /* data box: narrow panel docked lower-right (histograms match the text width) */
     #info{top:auto;bottom:8px;right:8px;left:auto;width:286px;max-width:calc(100vw - 16px);max-height:38%}
+    #timeseries{display:none !important}   /* too cramped on small/short screens */
   }
 </style>
 </head>
@@ -104,6 +122,7 @@
 </header>
 <div id="app">
   <div id="left">
+    <div id="mapwrap">
     <div id="map"></div>
     <div id="loadmsg">Loading…</div>
     <div id="info" class="ctl"></div>
@@ -143,6 +162,8 @@
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
       <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analysed from ~2004 on; earlier storms often lack them.</div>
     </details>
+    </div><!-- /#mapwrap -->
+    <div id="timeseries"></div>
   </div>
 </div>
 
@@ -419,8 +440,85 @@ window.__initViewer = function(){
     infoBox.querySelector('.infoclose').addEventListener('click', closeInfo);
     infoBox.style.display = 'block';
     document.body.classList.add('info-open');
+    updateTSMarker(i);
   }
-  function closeInfo(){ curSel = null; hlGroup.clearLayers(); infoBox.style.display='none'; document.body.classList.remove('info-open'); }
+  function closeInfo(){ curSel = null; hlGroup.clearLayers(); infoBox.style.display='none'; document.body.classList.remove('info-open'); updateTSMarker(null); }
+
+  // ---------- lifecycle time series (single-storm view) ----------
+  const tsEl = document.getElementById('timeseries');
+  let tsState = null;
+  function isCompact(){ return window.innerWidth <= 640 || window.innerHeight <= 540; }
+  function tEpoch(t){ return Date.UTC(+t.slice(0,4), +t.slice(4,6)-1, +t.slice(6,8), +t.slice(8,10)||0, +t.slice(10,12)||0); }
+  function niceRange(mn, mx){ if(!isFinite(mn)||!isFinite(mx)) return [0,1]; if(mn===mx){ mn-=1; mx+=1; } const p=(mx-mn)*0.08; return [mn-p, mx+p]; }
+  function buildTS(pts){
+    tsState=null; tsEl.innerHTML='';
+    if(!pts || pts.length<2 || isCompact()){ tsEl.style.display='none'; return; }
+    const times=pts.map(p=>tEpoch(p[ix.t]));
+    const t0=times[0], t1=times[times.length-1], span=Math.max(1, t1-t0);
+    const VBW=1000, VBH=150, xOf=t=>((t-t0)/span)*VBW, yPix=(v,mn,mx)=> (1-(v-mn)/((mx-mn)||1))*VBH;
+    const series=[
+      {key:'vmax', title:'Vmax', unit:'kt', lines:[{vals:pts.map(p=>p[ix.vmax]), color:'#ff8c42'}]},
+      {key:'pmin', title:'Pmin', unit:'mb', lines:[{vals:pts.map(p=>p[ix.pmin]), color:'#5ec8ff'}]},
+      {key:'size', title:'Size', unit:'nm', wide:true, lines:[
+        {vals:pts.map(p=>meanNZ([p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]])), color:'#7fc4ff', label:'R34'},
+        {vals:pts.map(p=>meanNZ([p[ix.r50ne],p[ix.r50se],p[ix.r50sw],p[ix.r50nw]])), color:'#3f86e0', label:'R50'},
+        {vals:pts.map(p=>meanNZ([p[ix.r64ne],p[ix.r64se],p[ix.r64sw],p[ix.r64nw]])), color:'#1f6dff', label:'R64'},
+        {vals:pts.map(p=> (p[ix.rmw]!=null && p[ix.rmw]>0) ? p[ix.rmw] : null), color:'#ff6b6b', label:'Rmax'}
+      ]}
+    ];
+    let html='<div class="tsrow">';
+    for(const s of series){
+      const all=s.lines.flatMap(L=>L.vals).filter(v=>v!=null && isFinite(v));
+      const has=all.length>0;
+      let [mn,mx]=niceRange(Math.min(...all), Math.max(...all));
+      let paths='';
+      if(has) for(const L of s.lines){
+        let d='', pen=false;
+        for(let i=0;i<L.vals.length;i++){ const v=L.vals[i];
+          if(v==null || !isFinite(v)){ pen=false; continue; }
+          d += (pen?'L':'M') + xOf(times[i]).toFixed(1) + ' ' + yPix(v,mn,mx).toFixed(1) + ' '; pen=true;
+        }
+        if(d) paths+=`<path d="${d}" fill="none" stroke="${L.color}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+      }
+      const grid=`<line x1="0" y1="0.6" x2="${VBW}" y2="0.6" stroke="#22303f"/><line x1="0" y1="${VBH-0.6}" x2="${VBW}" y2="${VBH-0.6}" stroke="#22303f"/>`;
+      const mark=`<line class="tsmark" x1="-9" y1="0" x2="-9" y2="${VBH}" stroke="#ffe000" stroke-width="1.4" vector-effect="non-scaling-stroke" style="display:none"/>`;
+      const legend = s.lines.length>1 ? `<span class="tsleg">${s.lines.map(L=>`<b style="color:${L.color}">■</b>${L.label}`).join(' ')}</span>` : '';
+      const ylab = has ? `<div class="tsymax">${Math.round(mx)}</div><div class="tsymin">${Math.round(mn)}</div>` : '<div class="tsnodata">no size data</div>';
+      html+=`<div class="tspanel${s.wide?' wide':''}" data-key="${s.key}">
+        <div class="tstitle">${s.title} <span class="tsunit">${s.unit}</span><span class="tsval"></span>${legend}</div>
+        <div class="tsplot"><svg class="tssvg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">${grid}${paths}${mark}</svg>${ylab}</div>
+        <div class="tsx"><span>${fmtTime(pts[0][ix.t]).date}</span><span>${fmtTime(pts[pts.length-1][ix.t]).date}</span></div>
+      </div>`;
+    }
+    html+='</div>';
+    tsEl.innerHTML=html; tsEl.style.display='block';
+    tsState={pts, times, xOf, VBW};
+    tsEl.querySelectorAll('.tsplot').forEach(pl=>{
+      pl.addEventListener('click', ev=>{
+        const svg=pl.querySelector('svg'), r=svg.getBoundingClientRect();
+        const vbx=(ev.clientX-r.left)/r.width*VBW;
+        let bi=0, bd=Infinity;
+        for(let i=0;i<times.length;i++){ const dd=Math.abs(xOf(times[i])-vbx); if(dd<bd){ bd=dd; bi=i; } }
+        selectPoint(bi, pointData(pts[bi]));
+      });
+    });
+    updateTSMarker(curSel);
+  }
+  function updateTSMarker(i){
+    if(!tsState) return;
+    const show = (i!=null);
+    const x = show ? tsState.xOf(tsState.times[i]) : -9;
+    tsEl.querySelectorAll('.tsmark').forEach(m=>{ m.setAttribute('x1', x); m.setAttribute('x2', x); m.style.display = show?'':'none'; });
+    const p = show ? tsState.pts[i] : null;
+    tsEl.querySelectorAll('.tspanel').forEach(pan=>{
+      const el=pan.querySelector('.tsval'); if(!el) return;
+      if(!show){ el.textContent=''; return; }
+      const k=pan.getAttribute('data-key');
+      if(k==='vmax') el.textContent = p[ix.vmax]!=null ? ' · '+p[ix.vmax] : '';
+      else if(k==='pmin') el.textContent = p[ix.pmin]!=null ? ' · '+p[ix.pmin] : '';
+      else if(k==='size'){ const r=meanNZ([p[ix.r34ne],p[ix.r34se],p[ix.r34sw],p[ix.r34nw]]); el.textContent = r!=null ? ' · R34 '+Math.round(r) : ''; }
+    });
+  }
   t34.addEventListener('change', applyToggles);
   t64.addEventListener('change', applyToggles);
   trmw.addEventListener('change', applyToggles);
@@ -548,6 +646,8 @@ window.__initViewer = function(){
     document.getElementById('stormTitle').textContent = `${titleCase(storm.name)} (${storm.year})`;
     document.getElementById('stormSub').innerHTML =
       `${basinName(storm.basin)} &middot; ${pts.length} pts &middot; peak ${peak>-99? peak+' kt':'—'} (${catName})`;
+
+    buildTS(pts);   // lifecycle time series below the map
   }
 
   function titleCase(s){ return s.replace(/\w\S*/g, t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()); }
@@ -606,6 +706,8 @@ window.__initViewer = function(){
     const day = (m==='day');
     dayControls.style.display   = day ? '' : 'none';
     stormControls.style.display = day ? 'none' : '';
+    if(day){ tsEl.style.display='none'; }   // no lifecycle strip in Day in History
+    else { viewLocked = false; }            // back to Single Storm → let it re-centre on the storm
   }
   modeSel.addEventListener('change', ()=>{
     const m = modeSel.value; applyMode(m);
