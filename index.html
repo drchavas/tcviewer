@@ -43,10 +43,10 @@
   .tsleg b{font-weight:400}
   .tsplot{position:relative;flex:1 1 auto;min-height:0;background:#0e1722;border:1px solid var(--line);border-radius:4px;overflow:hidden;cursor:crosshair}
   .tssvg{position:absolute;inset:0;width:100%;height:100%;display:block}
-  .tsymax,.tsymin{position:absolute;left:3px;font-size:9px;color:#8aa0b4;font-variant-numeric:tabular-nums;pointer-events:none;background:rgba(14,23,34,.55);padding:0 2px;border-radius:2px}
-  .tsymax{top:1px}.tsymin{bottom:1px}
+  .tsyl{position:absolute;left:3px;font-size:9px;color:#8aa0b4;font-variant-numeric:tabular-nums;transform:translateY(-50%);background:rgba(14,23,34,.55);padding:0 2px;border-radius:2px;pointer-events:none}
   .tsnodata{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
-  .tsx{display:flex;justify-content:space-between;font-size:9px;color:#8aa0b4;margin-top:2px}
+  .tsxaxis{position:relative;height:12px;margin-top:2px}
+  .tsxaxis span{position:absolute;transform:translateX(-50%);font-size:9px;color:#8aa0b4;white-space:nowrap;font-variant-numeric:tabular-nums}
   #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
            text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
   .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
@@ -450,12 +450,26 @@ window.__initViewer = function(){
   function isCompact(){ return window.innerWidth <= 640 || window.innerHeight <= 540; }
   function tEpoch(t){ return Date.UTC(+t.slice(0,4), +t.slice(4,6)-1, +t.slice(6,8), +t.slice(8,10)||0, +t.slice(10,12)||0); }
   function niceRange(mn, mx){ if(!isFinite(mn)||!isFinite(mx)) return [0,1]; if(mn===mx){ mn-=1; mx+=1; } const p=(mx-mn)*0.08; return [mn-p, mx+p]; }
+  function niceTicks(mn, mx, n){
+    const span=mx-mn; if(!(span>0)) return [mn];
+    const step0=span/n, mag=Math.pow(10, Math.floor(Math.log10(step0))), norm=step0/mag;
+    const step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+    const ticks=[]; for(let v=Math.ceil(mn/step)*step; v<=mx+step*1e-6; v+=step) ticks.push(+v.toFixed(6));
+    return ticks;
+  }
+  const MON3=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function shortDate(ep){ const d=new Date(ep); return MON3[d.getUTCMonth()]+' '+d.getUTCDate(); }
   function buildTS(pts){
     tsState=null; tsEl.innerHTML='';
     if(!pts || pts.length<2 || isCompact()){ tsEl.style.display='none'; return; }
     const times=pts.map(p=>tEpoch(p[ix.t]));
     const t0=times[0], t1=times[times.length-1], span=Math.max(1, t1-t0);
     const VBW=1000, VBH=150, xOf=t=>((t-t0)/span)*VBW, yPix=(v,mn,mx)=> (1-(v-mn)/((mx-mn)||1))*VBH;
+    // shared time (x) ticks at day boundaries
+    const dayMs=86400000, dstep=Math.max(1, Math.ceil(span/dayMs/6))*dayMs;
+    const xticks=[]; for(let t=Math.ceil(t0/dayMs)*dayMs; t<=t1+1; t+=dstep) xticks.push(t);
+    const xgrid=xticks.map(t=>`<line x1="${xOf(t).toFixed(1)}" y1="0" x2="${xOf(t).toFixed(1)}" y2="${VBH}" stroke="#1b2735" vector-effect="non-scaling-stroke"/>`).join('');
+    const xlabels=xticks.map(t=>`<span style="left:${(xOf(t)/VBW*100).toFixed(2)}%">${shortDate(t)}</span>`).join('');
     const series=[
       {key:'vmax', title:'Vmax', unit:'kt', lines:[{vals:pts.map(p=>p[ix.vmax]), color:'#ff8c42'}]},
       {key:'pmin', title:'Pmin', unit:'mb', lines:[{vals:pts.map(p=>p[ix.pmin]), color:'#5ec8ff'}]},
@@ -471,6 +485,9 @@ window.__initViewer = function(){
       const all=s.lines.flatMap(L=>L.vals).filter(v=>v!=null && isFinite(v));
       const has=all.length>0;
       let [mn,mx]=niceRange(Math.min(...all), Math.max(...all));
+      const yt = has ? niceTicks(mn, mx, 4) : [];
+      const ygrid = yt.map(v=>`<line x1="0" y1="${yPix(v,mn,mx).toFixed(1)}" x2="${VBW}" y2="${yPix(v,mn,mx).toFixed(1)}" stroke="#1b2735" vector-effect="non-scaling-stroke"/>`).join('');
+      const ylabels = yt.map(v=>`<div class="tsyl" style="top:${(yPix(v,mn,mx)/VBH*100).toFixed(2)}%">${Math.round(v)}</div>`).join('');
       let paths='';
       if(has) for(const L of s.lines){
         let d='', pen=false;
@@ -480,14 +497,14 @@ window.__initViewer = function(){
         }
         if(d) paths+=`<path d="${d}" fill="none" stroke="${L.color}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
       }
-      const grid=`<line x1="0" y1="0.6" x2="${VBW}" y2="0.6" stroke="#22303f"/><line x1="0" y1="${VBH-0.6}" x2="${VBW}" y2="${VBH-0.6}" stroke="#22303f"/>`;
       const mark=`<line class="tsmark" x1="-9" y1="0" x2="-9" y2="${VBH}" stroke="#ffe000" stroke-width="1.4" vector-effect="non-scaling-stroke" style="display:none"/>`;
       const legend = s.lines.length>1 ? `<span class="tsleg">${s.lines.map(L=>`<b style="color:${L.color}">■</b>${L.label}`).join(' ')}</span>` : '';
-      const ylab = has ? `<div class="tsymax">${Math.round(mx)}</div><div class="tsymin">${Math.round(mn)}</div>` : '<div class="tsnodata">no size data</div>';
+      const svg=`<svg class="tssvg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">${xgrid}${ygrid}${paths}${mark}</svg>`;
+      const nodata = has ? '' : '<div class="tsnodata">no size data</div>';
       html+=`<div class="tspanel${s.wide?' wide':''}" data-key="${s.key}">
         <div class="tstitle">${s.title} <span class="tsunit">${s.unit}</span><span class="tsval"></span>${legend}</div>
-        <div class="tsplot"><svg class="tssvg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">${grid}${paths}${mark}</svg>${ylab}</div>
-        <div class="tsx"><span>${fmtTime(pts[0][ix.t]).date}</span><span>${fmtTime(pts[pts.length-1][ix.t]).date}</span></div>
+        <div class="tsplot">${svg}${ylabels}${nodata}</div>
+        <div class="tsxaxis">${xlabels}</div>
       </div>`;
     }
     html+='</div>';
