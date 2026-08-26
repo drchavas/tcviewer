@@ -345,8 +345,10 @@ window.__initViewer = function(){
 
   // ---------- map ----------
   const map = L.map('map', {worldCopyJump:false}).setView([25,-70], 4);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:10
+  // Esri's free canvas basemap (no API key). NOTE: Esri tile URLs are {z}/{y}/{x}
+  // (row before column) — using {z}/{x}/{y} silently serves scrambled tiles.
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', maxZoom:16
   }).addTo(map);
   // panes give stable stacking: footprints below the track, R64 above R34
   map.createPane('pgrat'); map.getPane('pgrat').style.zIndex = 250;  // graticule just above tiles
