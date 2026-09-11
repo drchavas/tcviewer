@@ -133,6 +133,7 @@
       <div class="row"><label>Mode</label><select id="modeSel">
         <option value="storm">Single Storm</option>
         <option value="day">Day in History</option>
+        <option value="month">Month in History</option>
       </select></div>
       <div id="stormControls">
         <div class="row"><label>Basin</label><select id="basinSel"></select></div>
@@ -154,6 +155,18 @@
         <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
         <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
         <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
+      </div>
+      <div id="monthControls" style="display:none">
+        <div class="row" style="margin-top:2px">
+          <label>Month</label>
+          <span class="dateparts">
+            <input id="yMSel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
+            <span class="sep">-</span>
+            <input id="mMSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
+          </span></div>
+        <button id="globalBtnM" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
+        <div class="ssub" id="monthSub" style="display:none">&nbsp;</div>
+        <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a month to see every storm active that month — full track shown, with its in-month positions highlighted.</div>
       </div>
     </details>
     <details id="legend" class="ctl" open>
@@ -726,22 +739,25 @@ window.__initViewer = function(){
   yearSel.addEventListener('change', ()=> populateStorms(basinSel.value, +yearSel.value));
   stormSel.addEventListener('change', ()=> renderStorm(DATA.storms[+stormSel.value]));
 
-  // ---------- view mode: Single Storm vs Day in History ----------
+  // ---------- view mode: Single Storm / Day in History / Month in History ----------
   const modeSel = document.getElementById('modeSel');
   const stormControls = document.getElementById('stormControls');
   const dayControls = document.getElementById('dayControls');
+  const monthControls = document.getElementById('monthControls');
   function applyMode(m){
     modeSel.value = m;
-    const day = (m==='day');
-    dayControls.style.display   = day ? '' : 'none';
-    stormControls.style.display = day ? 'none' : '';
-    if(day){ tsEl.style.display='none'; }   // no lifecycle strip in Day in History
-    else { viewLocked = false; }            // back to Single Storm → let it re-centre on the storm
+    const day=(m==='day'), month=(m==='month'), hist=day||month;
+    dayControls.style.display   = day   ? '' : 'none';
+    monthControls.style.display = month ? '' : 'none';
+    stormControls.style.display = hist  ? 'none' : '';
+    if(hist){ tsEl.style.display='none'; }   // no lifecycle strip in the history modes
+    else { viewLocked = false; }             // back to Single Storm → let it re-centre on the storm
   }
   modeSel.addEventListener('change', ()=>{
     const m = modeSel.value; applyMode(m);
-    if(m==='day'){ if(dateSel.value) showDay(dateSel.value); }                 // re-plot if a date is already set
-    else { dateSel.value=''; renderStorm(DATA.storms[+stormSel.value]); }      // back to the selected storm
+    if(m==='day'){ if(dateSel.value) showDay(dateSel.value); }                       // re-plot if a date is set
+    else if(m==='month'){ if(monthSel.value) showMonth(+yMSel.value, +mMSel.value); } // re-plot if a month is set
+    else { dateSel.value=''; renderStorm(DATA.storms[+stormSel.value]); }            // back to the selected storm
   });
 
   // ---------- day view: all storms active on a chosen date ----------
@@ -761,6 +777,31 @@ window.__initViewer = function(){
     set value(v){ if(!v){ ySel.value=''; mSel.value=''; dSel.value=''; } }
   };
   const SYN = ["00","06","12","18"];
+
+  // month-in-history boxes (year + month) behave like one field: value is "YYYY-MM" or ""
+  const yMSel=document.getElementById('yMSel'), mMSel=document.getElementById('mMSel');
+  const monthSub=document.getElementById('monthSub');
+  yMSel.min=Y_MIN; yMSel.max=Y_MAX;
+  const monthSel = {
+    get value(){
+      if(yMSel.value===''||mMSel.value==='') return '';
+      const y=+yMSel.value, m=+mMSel.value;
+      return (Number.isFinite(y)&&Number.isFinite(m)) ? `${y}-${pad2(m)}` : '';
+    },
+    set value(v){ if(!v){ yMSel.value=''; mMSel.value=''; } }
+  };
+  function onMonthChange(){
+    if(yMSel.value===''||mMSel.value==='') return;
+    let yi=Math.round(+yMSel.value), mi=Math.round(+mMSel.value);
+    if(!Number.isFinite(yi)||!Number.isFinite(mi)) return;
+    const base=new Date(Date.UTC(2000, mi-1, 1));   // roll month overflow onto the year (Dec+1 → Jan next yr)
+    yi += base.getUTCFullYear()-2000; mi=base.getUTCMonth()+1;
+    yi=Math.max(Y_MIN, Math.min(Y_MAX, yi));
+    yMSel.value=yi; mMSel.value=mi;
+    showMonth(yi, mi);
+  }
+  [yMSel,mMSel].forEach(el=> el.addEventListener('change', onMonthChange));
+  document.getElementById('globalBtnM').addEventListener('click', goGlobal);
 
   function selectStormBySid(sid){
     const i = DATA.storms.findIndex(s=>s.sid===sid); if(i<0) return;
@@ -789,27 +830,28 @@ window.__initViewer = function(){
     infoBox.querySelector('.viewtrack').addEventListener('click', ()=> selectStormBySid(storm.sid));
     infoBox.style.display='block'; document.body.classList.add('info-open');
   }
-  async function showDay(dateStr){
-    const ymd = dateStr.replace(/-/g,''), di = +ymd;
-    const active = DATA.storms.filter(s => s.t0<=di && di<=s.t1);
+  // Shared renderer for the history modes: draw the full track of every active storm,
+  // ring the positions that fall in the selected window (opts.inHi), label & make clickable.
+  async function showHistory(opts){
+    const active = opts.storms;
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
-    if(basins.some(b=>!basinCache[b])) window.__loadmsg.show('Loading storms for '+dateStr+'…');
+    if(basins.some(b=>!basinCache[b])) window.__loadmsg.show('Loading storms for '+opts.label+'…');
     let bd;
     try{ bd = Object.fromEntries(await Promise.all(basins.map(async b=>[b, await ensureBasin(b)]))); }
-    catch(e){ console.error(e); window.__loadmsg.show('Could not load data for '+dateStr+'.'); return; }
+    catch(e){ console.error(e); window.__loadmsg.show('Could not load data for '+opts.label+'.'); return; }
     if(token !== renderToken) return;
     window.__loadmsg.hide();
     layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
     hlGroup.clearLayers(); dateLayer.clearLayers();
     infoBox.style.display='none'; document.body.classList.remove('info-open');
-    curPts=null; curSel=null; dayMode=true;
+    curPts=null; curSel=null; dayMode=true; tsEl.style.display='none';
 
-    const allLL=[]; let count=0;
+    let count=0;
     active.forEach(s=>{
       const pts=(bd[s.basin]||{})[s.sid]; if(!pts) return;
-      const dayPts=pts.filter(p=> p[ix.t].slice(0,8)===ymd && SYN.includes(p[ix.t].slice(8,10)));
-      if(!dayPts.length) return;
+      const hiPts=pts.filter(opts.inHi);
+      if(!hiPts.length) return;
       count++;
       const trackLL=pts.map(p=>[p[ix.lat],p[ix.lon]]);
       // wind-radii swaths for the full track — same build as the single-storm view
@@ -830,28 +872,43 @@ window.__initViewer = function(){
       }
       // …and a clickable dot at every track point
       pts.forEach(p=>{
-        const d=pointData(p); allLL.push([d.lat,d.lon]);
+        const d=pointData(p);
         const m=L.circleMarker([d.lat,d.lon],{radius:5,color:'#0b1119',weight:0.8,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
         m.on('click', ()=> showDayInfo(s,p));
         m.on('mouseover',function(){this.setStyle({radius:7});}); m.on('mouseout',function(){this.setStyle({radius:5});});
       });
-      // highlight this date's 00/06/12/18 UTC positions (white ring, drawn on top)
-      dayPts.forEach(p=>{
+      // ring the in-window positions (white outline, drawn on top)
+      hiPts.forEach(p=>{
         const d=pointData(p);
         const m=L.circleMarker([d.lat,d.lon],{radius:6,color:'#ffffff',weight:2,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
         m.on('click', ()=> showDayInfo(s,p));
         m.on('mouseover',function(){this.setStyle({radius:8});}); m.on('mouseout',function(){this.setStyle({radius:6});});
       });
-      // name label at this date's first synoptic position
-      const p0=dayPts[0];
+      // name label at the first in-window position
+      const p0=hiPts[0];
       L.marker([p0[ix.lat],p0[ix.lon]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
         html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
     });
-    if(!viewLocked) goGlobal();   // first date entered → snap to global; locks the domain thereafter
-    const dstr = fmtTime(ymd+'0000').date;
-    dateSub.style.display='block';
-    dateSub.innerHTML = count ? `<b>${dstr}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
-                              : `<b>${dstr}</b> &middot; no storms on this date`;
+    if(!viewLocked) goGlobal();   // first entry → snap to global; locks the domain thereafter
+    opts.subEl.style.display='block';
+    opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
+                                 : `<b>${opts.label}</b> &middot; ${opts.emptyText}`;
+  }
+  function showDay(dateStr){
+    const ymd = dateStr.replace(/-/g,''), di = +ymd;
+    return showHistory({
+      label: fmtTime(ymd+'0000').date, subEl: dateSub, emptyText:'no storms on this date',
+      storms: DATA.storms.filter(s => s.t0<=di && di<=s.t1),
+      inHi: p => p[ix.t].slice(0,8)===ymd && SYN.includes(p[ix.t].slice(8,10))
+    });
+  }
+  function showMonth(y, m){
+    const ym = `${y}${pad2(m)}`, startInt=y*10000+m*100+1, endInt=y*10000+m*100+31;
+    return showHistory({
+      label: MON3[m-1]+' '+y, subEl: monthSub, emptyText:'no storms this month',
+      storms: DATA.storms.filter(s => s.t0<=endInt && s.t1>=startInt),
+      inHi: p => p[ix.t].slice(0,6)===ym && SYN.includes(p[ix.t].slice(8,10))
+    });
   }
   // Any of the three boxes changing (typed or stepped) re-plots. Day/month overflow
   // rolls over naturally (e.g. Aug 31 + one day → Sep 1); the year is clamped to the data.
@@ -898,8 +955,9 @@ window.__initViewer = function(){
       if(li<0) li = curPts.findIndex(p=>p[ix.lf]===1);
       if(li>=0){
         const lt = curPts[li][ix.t];
-        // Day in History defaults to Helene's landfall day (until the user changes it)
+        // Day/Month in History default to Helene's landfall day/month (until the user changes it)
         ySel.value=+lt.slice(0,4); mSel.value=+lt.slice(4,6); dSel.value=+lt.slice(6,8);
+        yMSel.value=+lt.slice(0,4); mMSel.value=+lt.slice(4,6);
         // desktop: also open that point's data sheet (on phones the sheet would cover the map)
         if(!compact) selectPoint(li, pointData(curPts[li]));
       }
