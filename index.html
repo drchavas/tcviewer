@@ -3,15 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TC Viewer — Tropical Cyclone Track &amp; Wind-Field Explorer</title>
-<meta name="description" content="Interactive explorer for global tropical cyclone tracks and wind fields (34/50/64 kt radii, Rmax) from NOAA IBTrACS — all basins, all storms in the record.">
+<title>TC Viewer — Tropical Cyclone (Hurricane &amp; Typhoon) Track &amp; Wind-Field Explorer</title>
+<meta name="description" content="Explore every tropical cyclone — hurricanes, typhoons, cyclones — in the NOAA IBTrACS record. Map any storm's best track coloured by Saffir–Simpson category, its 34/50/64-kt wind radii, size and Rmax; or browse all storms active on a day, in a month, or across any date range, worldwide.">
+<meta name="keywords" content="tropical cyclone, hurricane, typhoon, hurricane tracker, hurricane tracks, storm tracks, IBTrACS, best track, wind radii, 34 kt wind radius, 64 kt wind radius, storm size, radius of maximum wind, Rmax, Saffir-Simpson, NHC, JTWC, hurricane map, cyclone map, historical hurricanes">
 <meta name="author" content="Dan Chavas">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<link rel="canonical" href="https://tcviewer.org/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%80%3C/text%3E%3C/svg%3E">
-<meta property="og:title" content="TC Viewer — Tropical Cyclone Track &amp; Wind-Field Explorer">
-<meta property="og:description" content="Interactive global tropical-cyclone tracks and wind fields from NOAA IBTrACS.">
+<meta property="og:title" content="TC Viewer — Tropical Cyclone (Hurricane &amp; Typhoon) Track &amp; Wind-Field Explorer">
+<meta property="og:description" content="Map any tropical cyclone's track, intensity, wind radii and size from NOAA IBTrACS — all basins, all storms; browse by storm, day, month, or any date range.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://tcviewer.org/">
+<meta property="og:site_name" content="TC Viewer">
+<meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="TC Viewer — Tropical Cyclone Track &amp; Wind-Field Explorer">
+<meta name="twitter:description" content="Explore global hurricane/typhoon tracks, intensity and wind fields from NOAA IBTrACS — by storm, day, month, or date range.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": "https://tcviewer.org/#app",
+      "name": "TC Viewer",
+      "alternateName": "Tropical Cyclone Track & Wind-Field Explorer",
+      "url": "https://tcviewer.org/",
+      "description": "Interactive web map of global tropical cyclone (hurricane, typhoon) best tracks and wind fields from NOAA IBTrACS: intensity by Saffir–Simpson category, 34/50/64-kt wind radii, storm size and radius of maximum wind. Browse a single storm, all storms active on a day or in a month, or any date range.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any (modern web browser)",
+      "browserRequirements": "Requires JavaScript",
+      "inLanguage": "en",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "keywords": "tropical cyclone, hurricane, typhoon, IBTrACS, best track, wind radii, storm size, radius of maximum wind, Saffir-Simpson",
+      "author": { "@type": "Person", "name": "Dan Chavas", "url": "https://web.ics.purdue.edu/~dchavas/" },
+      "creator": { "@type": "Person", "name": "Dan Chavas" },
+      "isBasedOn": { "@id": "https://tcviewer.org/#dataset" }
+    },
+    {
+      "@type": "Dataset",
+      "@id": "https://tcviewer.org/#dataset",
+      "name": "NOAA IBTrACS v04r01 — International Best Track Archive for Climate Stewardship",
+      "description": "Global tropical cyclone best-track data (position, intensity, wind radii) compiled from official forecast agencies; this app uses the US agency for each basin (NHC in the Atlantic and E/C Pacific, JTWC elsewhere).",
+      "url": "https://www.ncei.noaa.gov/products/international-best-track-archive",
+      "creator": { "@type": "Organization", "name": "NOAA National Centers for Environmental Information (NCEI)" }
+    }
+  ]
+}
+</script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
@@ -238,7 +278,13 @@ window.__initViewer = function(){
     const la2 = Math.asin(Math.sin(la1)*Math.cos(d) + Math.cos(la1)*Math.sin(d)*Math.cos(br));
     const lo2 = lo1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(la1),
                                  Math.cos(d) - Math.sin(la1)*Math.sin(la2));
-    return [la2*180/Math.PI, ((lo2*180/Math.PI + 540)%360) - 180];
+    // Return longitude CONTINUOUS with the input (no ±180 wrap): a footprint centred near
+    // the dateline would otherwise get vertices on both sides of ±180 and the polygon would
+    // span the whole world. Keeping it relative to `lon` leaves the shape local; Leaflet
+    // renders lon just past ±180 correctly on the wrapped world copy.
+    let d2 = lo2*180/Math.PI - lon;
+    d2 = ((d2 + 540) % 360) - 180;            // shortest angular offset from the centre
+    return [la2*180/Math.PI, lon + d2];
   }
   // quadrant radii [NE,SE,SW,NW] -> smooth closed polygon. The four values are treated
   // as the radius at each quadrant CENTRE (NE=45°, SE=135°, SW=225°, NW=315°) and the
@@ -445,7 +491,27 @@ window.__initViewer = function(){
   const t64 = document.getElementById('t64');
   const trmw = document.getElementById('trmw');
   const infoBox = document.getElementById('info');
-  let curPts = null, curSel = null, curAtcf = '', curBasin = '';   // current storm state
+  let curPts = null, curSel = null, curAtcf = '', curBasin = '', curULon = null;   // current storm state
+  // Unwrap a storm's longitudes so they run continuously across the dateline (…178,179,180,181…)
+  // instead of jumping 179 → -179. Keeps tracks and wind-field polygons local near ±180 rather
+  // than smearing across the whole map.
+  function unwrapLons(pts){
+    const out=new Array(pts.length); let prev=null;
+    for(let i=0;i<pts.length;i++){
+      let lon=pts[i][ix.lon];
+      if(prev!==null){ while(lon-prev>180) lon-=360; while(lon-prev<-180) lon+=360; }
+      out[i]=lon; prev=lon;
+    }
+    // Re-centre the (now continuous) track so its MEDIAN longitude falls in [-180,180] —
+    // i.e. put the storm on whichever side of the dateline holds most of it. This keeps the
+    // single-storm view coherent (panned onto the wrapped map copy) and keeps the global
+    // modes essentially within the standard -180..180 domain (only a straddler overhangs a bit).
+    const sorted=[...out].sort((a,b)=>a-b);
+    const med=sorted[sorted.length>>1];
+    const k=Math.round(med/360);
+    if(k!==0) for(let i=0;i<out.length;i++) out[i]-=k*360;
+    return out;
+  }
   map.createPane('phl'); map.getPane('phl').style.zIndex = 450;  // clicked-point radii on top
   const hlGroup = L.layerGroup().addTo(map);
   function applyToggles(){
@@ -459,19 +525,20 @@ window.__initViewer = function(){
     hlGroup.clearLayers();
     if(i==null || !curPts) return;
     const d = pointData(curPts[i]);
+    const lon = (curULon && curULon[i]!=null) ? curULon[i] : d.lon;   // dateline-safe longitude
     // bright yellow X marking the selected track point (fixed size, inside the dot)
-    L.marker([d.lat,d.lon], {pane:'phl', interactive:false, icon:L.divIcon({
+    L.marker([d.lat,lon], {pane:'phl', interactive:false, icon:L.divIcon({
       className:'', iconSize:[10,10], iconAnchor:[5,5],
       html:'<svg width="10" height="10" viewBox="0 0 10 10" style="display:block"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#ffe000" stroke-width="2" stroke-linecap="round"/></svg>'
     })}).addTo(hlGroup);
-    if(t34.checked){ const f=footprint(d.lat,d.lon,d.r34);
+    if(t34.checked){ const f=footprint(d.lat,lon,d.r34);
       if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#7fc4ff', weight:6, opacity:1,
         fillColor:'lightskyblue', fillOpacity:0.22}).addTo(hlGroup); }
-    if(t64.checked){ const f=footprint(d.lat,d.lon,d.r64);
+    if(t64.checked){ const f=footprint(d.lat,lon,d.r64);
       if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#1f6dff', weight:6.4, opacity:1,
         fillColor:'#1f6dff', fillOpacity:0.30}).addTo(hlGroup); }
     if(trmw.checked && d.rmw!=null && d.rmw>0){
-      L.circle([d.lat,d.lon], {pane:'phl', interactive:false, radius:d.rmw*1852, color:'#ff3b3b',
+      L.circle([d.lat,lon], {pane:'phl', interactive:false, radius:d.rmw*1852, color:'#ff3b3b',
         weight:6, opacity:1, fillColor:'#ff6b6b', fillOpacity:0.22}).addTo(hlGroup); }
   }
   function selectPoint(i, d){
@@ -653,7 +720,8 @@ window.__initViewer = function(){
     curPts = pts;
     curAtcf = storm.atcf || '';
     curBasin = storm.basin || '';
-    const latlngs = pts.map(p=>[p[ix.lat], p[ix.lon]]);
+    const ulon = unwrapLons(pts); curULon = ulon;                 // dateline-safe longitudes
+    const latlngs = pts.map((p,i)=>[p[ix.lat], ulon[i]]);
 
     // coloured track segments (colour by category of segment's first point)
     for(let i=0;i<latlngs.length-1;i++){
@@ -665,7 +733,7 @@ window.__initViewer = function(){
     // clickable points
     for(let i=0;i<pts.length;i++){
       const d = pointData(pts[i]);
-      const m = L.circleMarker([d.lat,d.lon], {
+      const m = L.circleMarker([d.lat,ulon[i]], {
         radius:5, color:'#0b1119', weight:0.8,
         fillColor:catColor(d.sshs), fillOpacity:1
       }).addTo(layer);
@@ -675,11 +743,11 @@ window.__initViewer = function(){
     }
 
     // day labels at 00 UTC
-    for(const p of pts){
-      const t = p[ix.t];
+    for(let i=0;i<pts.length;i++){
+      const t = pts[i][ix.t];
       if(t.slice(8,12)==='0000'){
         const ft=fmtTime(t);
-        L.marker([p[ix.lat], p[ix.lon]], {interactive:false, icon:L.divIcon({
+        L.marker([pts[i][ix.lat], ulon[i]], {interactive:false, icon:L.divIcon({
           className:'', html:`<div style="color:#cdd9e5;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${ft.date.replace(', '+t.slice(0,4),'')}</div>`,
           iconSize:[0,0]})}).addTo(layer);
       }
@@ -693,11 +761,11 @@ window.__initViewer = function(){
     // Each radius is ONE coherent swath: union of every timestep's area plus interpolated
     // bridges. Rmax = a circle (equal radius in all quadrants).
     const r34items=[], r64items=[], rmwitems=[];
-    for(const p of pts){
-      const d = pointData(p);
-      r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r34} : null);
-      r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r64} : null);
-      rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon:d.lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
+    for(let i=0;i<pts.length;i++){
+      const d = pointData(pts[i]), lon = ulon[i];
+      r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r34} : null);
+      r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r64} : null);
+      rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
     }
     try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
     try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
@@ -880,18 +948,19 @@ window.__initViewer = function(){
     let count=0;
     active.forEach(s=>{
       const pts=(bd[s.basin]||{})[s.sid]; if(!pts) return;
-      const hiPts=pts.filter(opts.inHi);
-      if(!hiPts.length) return;
+      const hiIdx=pts.map((p,i)=>i).filter(i=>opts.inHi(pts[i]));
+      if(!hiIdx.length) return;
       count++;
-      const trackLL=pts.map(p=>[p[ix.lat],p[ix.lon]]);
+      const ulon=unwrapLons(pts);                       // dateline-safe longitudes for this storm
+      const trackLL=pts.map((p,i)=>[p[ix.lat],ulon[i]]);
       // wind-radii swaths for the full track — same build as the single-storm view
       // (added to the toggleable r34/r64/rmw groups, so the legend checkboxes control them)
       const r34items=[], r64items=[], rmwitems=[];
-      for(const p of pts){
-        const d=pointData(p);
-        r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r34} : null);
-        r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon:d.lon,radii:d.r64} : null);
-        rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon:d.lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
+      for(let i=0;i<pts.length;i++){
+        const d=pointData(pts[i]), lon=ulon[i];
+        r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r34} : null);
+        r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r64} : null);
+        rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
       }
       try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
       try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
@@ -901,22 +970,22 @@ window.__initViewer = function(){
         L.polyline([trackLL[i],trackLL[i+1]],{color:catColor(pts[i][ix.sshs]),weight:3,opacity:0.95}).addTo(dateLayer);
       }
       // …and a clickable dot at every track point
-      pts.forEach(p=>{
+      pts.forEach((p,i)=>{
         const d=pointData(p);
-        const m=L.circleMarker([d.lat,d.lon],{radius:5,color:'#0b1119',weight:0.8,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
+        const m=L.circleMarker([d.lat,ulon[i]],{radius:5,color:'#0b1119',weight:0.8,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
         m.on('click', ()=> showDayInfo(s,p));
         m.on('mouseover',function(){this.setStyle({radius:7});}); m.on('mouseout',function(){this.setStyle({radius:5});});
       });
       // ring the in-window positions (white outline, drawn on top)
-      hiPts.forEach(p=>{
-        const d=pointData(p);
-        const m=L.circleMarker([d.lat,d.lon],{radius:6,color:'#ffffff',weight:2,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
-        m.on('click', ()=> showDayInfo(s,p));
+      hiIdx.forEach(i=>{
+        const d=pointData(pts[i]);
+        const m=L.circleMarker([d.lat,ulon[i]],{radius:6,color:'#ffffff',weight:2,fillColor:catColor(d.sshs),fillOpacity:1}).addTo(dateLayer);
+        m.on('click', ()=> showDayInfo(s,pts[i]));
         m.on('mouseover',function(){this.setStyle({radius:8});}); m.on('mouseout',function(){this.setStyle({radius:6});});
       });
       // name label at the first in-window position
-      const p0=hiPts[0];
-      L.marker([p0[ix.lat],p0[ix.lon]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
+      const i0=hiIdx[0];
+      L.marker([pts[i0][ix.lat],ulon[i0]],{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],
         html:`<div style="color:#e6edf3;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(8px,-8px);white-space:nowrap">${titleCase(s.name)}</div>`})}).addTo(dateLayer);
     });
     if(!viewLocked) goGlobal();   // first entry → snap to global; locks the domain thereafter
