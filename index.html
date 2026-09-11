@@ -836,12 +836,15 @@ window.__initViewer = function(){
     const active = opts.storms;
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
-    if(basins.some(b=>!basinCache[b])) window.__loadmsg.show('Loading storms for '+opts.label+'…');
+    window.__loadmsg.show('Loading storms for '+opts.label+'…');
+    // let the message actually paint before we block on loading/rendering (two frames
+    // guarantee a paint) — otherwise, with data cached, it would never become visible.
+    await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
+    if(token !== renderToken) return;            // superseded while the message painted
     let bd;
     try{ bd = Object.fromEntries(await Promise.all(basins.map(async b=>[b, await ensureBasin(b)]))); }
     catch(e){ console.error(e); window.__loadmsg.show('Could not load data for '+opts.label+'.'); return; }
     if(token !== renderToken) return;
-    window.__loadmsg.hide();
     layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
     hlGroup.clearLayers(); dateLayer.clearLayers();
     infoBox.style.display='none'; document.body.classList.remove('info-open');
@@ -893,6 +896,7 @@ window.__initViewer = function(){
     opts.subEl.style.display='block';
     opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
                                  : `<b>${opts.label}</b> &middot; ${opts.emptyText}`;
+    window.__loadmsg.hide();   // hide only after the (blocking) render is done, so it stays up throughout
   }
   function showDay(dateStr){
     const ymd = dateStr.replace(/-/g,''), di = +ymd;
