@@ -470,6 +470,13 @@ window.__initViewer = function(){
   map.on('moveend zoomend', drawGraticule);
   drawGraticule();
 
+  // International Date Line, drawn at both ±180 edges (and the adjacent wrapped copies) so
+  // dateline-crossing storms read correctly wherever they land.
+  [-540, -180, 180, 540].forEach(lon=>{
+    L.polyline([[-85,lon],[85,lon]], {pane:'pgrat', interactive:false,
+      color:'#ff4d4d', weight:1.2, opacity:0.75, dashArray:'5 5'}).addTo(map);
+  });
+
   // ---------- view lock ----------
   // The map auto-frames selections until the user takes control. The first time a date
   // is entered we snap to a global view; after that (or after any manual zoom/pan) the
