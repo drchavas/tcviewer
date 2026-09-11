@@ -148,9 +148,9 @@
           <span class="dateparts">
             <input id="ySel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
             <span class="sep">-</span>
-            <input id="mSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
+            <input id="mSel" class="dp" type="number" step="1" placeholder="MM" aria-label="Month">
             <span class="sep">-</span>
-            <input id="dSel" class="dp" type="number" step="1" min="1" max="31" placeholder="DD" aria-label="Day">
+            <input id="dSel" class="dp" type="number" step="1" placeholder="DD" aria-label="Day">
           </span></div>
         <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
         <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
@@ -162,7 +162,7 @@
           <span class="dateparts">
             <input id="yMSel" class="dp" type="number" step="1" placeholder="YYYY" aria-label="Year">
             <span class="sep">-</span>
-            <input id="mMSel" class="dp" type="number" step="1" min="1" max="12" placeholder="MM" aria-label="Month">
+            <input id="mMSel" class="dp" type="number" step="1" placeholder="MM" aria-label="Month">
           </span></div>
         <button id="globalBtnM" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
         <div class="ssub" id="monthSub" style="display:none">&nbsp;</div>
@@ -794,9 +794,9 @@ window.__initViewer = function(){
     if(yMSel.value===''||mMSel.value==='') return;
     let yi=Math.round(+yMSel.value), mi=Math.round(+mMSel.value);
     if(!Number.isFinite(yi)||!Number.isFinite(mi)) return;
-    const base=new Date(Date.UTC(2000, mi-1, 1));   // roll month overflow onto the year (Dec+1 → Jan next yr)
-    yi += base.getUTCFullYear()-2000; mi=base.getUTCMonth()+1;
     yi=Math.max(Y_MIN, Math.min(Y_MAX, yi));
+    const base=new Date(Date.UTC(yi, mi-1, 1));     // roll month overflow onto the year (Dec+1 → Jan next yr)
+    yi=Math.max(Y_MIN, Math.min(Y_MAX, base.getUTCFullYear())); mi=base.getUTCMonth()+1;
     yMSel.value=yi; mMSel.value=mi;
     showMonth(yi, mi);
   }
@@ -921,10 +921,11 @@ window.__initViewer = function(){
     if(y===''||m===''||d==='') return;                                                // wait for all three boxes
     let yi=Math.round(+y), mi=Math.round(+m), di=Math.round(+d);
     if(!Number.isFinite(yi)||!Number.isFinite(mi)||!Number.isFinite(di)) return;
-    // normalise month/day overflow with a dummy year, then carry any year change onto yi
-    const base=new Date(Date.UTC(2000, mi-1, di));
-    yi += base.getUTCFullYear()-2000; mi=base.getUTCMonth()+1; di=base.getUTCDate();
+    // Roll month/day overflow using the ACTUAL year (so Feb length, leap years and the
+    // year carry are all correct). Pre-clamp the year to keep it ≥100 (no 2-digit remap).
     yi=Math.max(Y_MIN, Math.min(Y_MAX, yi));
+    const base=new Date(Date.UTC(yi, mi-1, di));
+    yi=Math.max(Y_MIN, Math.min(Y_MAX, base.getUTCFullYear())); mi=base.getUTCMonth()+1; di=base.getUTCDate();
     ySel.value=yi; mSel.value=mi; dSel.value=di;                                       // reflect normalised values
     showDay(`${yi}-${pad2(mi)}-${pad2(di)}`);
   }
