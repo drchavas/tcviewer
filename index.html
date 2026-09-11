@@ -195,7 +195,7 @@
           </span></div>
         <button id="globalBtn" type="button" style="margin-top:2px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer">Zoom to global</button>
         <div class="ssub" id="dateSub" style="display:none">&nbsp;</div>
-        <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with its 00/06/12/18 UTC positions highlighted.</div>
+        <div class="quad" style="margin-top:2px;font-size:10.5px">Pick a date to see every storm active that day — full track shown, with that day's positions highlighted.</div>
       </div>
       <div id="monthControls" style="display:none">
         <div class="row" style="margin-top:2px">
@@ -1006,7 +1006,7 @@ window.__initViewer = function(){
     return showHistory({
       label: fmtTime(ymd+'0000').date, subEl: dateSub, emptyText:'no storms on this date',
       storms: DATA.storms.filter(s => s.t0<=di && di<=s.t1),
-      inHi: p => p[ix.t].slice(0,8)===ymd && SYN.includes(p[ix.t].slice(8,10))
+      inHi: p => p[ix.t].slice(0,8)===ymd
     });
   }
   function showMonth(y, m){
@@ -1014,7 +1014,7 @@ window.__initViewer = function(){
     return showHistory({
       label: MON3[m-1]+' '+y, subEl: monthSub, emptyText:'no storms this month',
       storms: DATA.storms.filter(s => s.t0<=endInt && s.t1>=startInt),
-      inHi: p => p[ix.t].slice(0,6)===ym && SYN.includes(p[ix.t].slice(8,10))
+      inHi: p => p[ix.t].slice(0,6)===ym
     });
   }
   // Normalise a (year,month,day) triple: roll month/day overflow using the ACTUAL year
@@ -1051,7 +1051,7 @@ window.__initViewer = function(){
     return showHistory({
       label: `${fmt(s)} – ${fmt(e)}`, subEl: rangeSub, emptyText:'no storms in this range',
       storms: DATA.storms.filter(st => st.t0<=e && st.t1>=s),
-      inHi: p => { const pd=+p[ix.t].slice(0,8); return pd>=s && pd<=e && SYN.includes(p[ix.t].slice(8,10)); }
+      inHi: p => { const pd=+p[ix.t].slice(0,8); return pd>=s && pd<=e; }
     });
   }
   function onRangeChange(){
