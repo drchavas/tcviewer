@@ -749,6 +749,7 @@ window.__initViewer = function(){
   let renderToken = 0;
   async function renderStorm(storm){
     lastRender = ()=>renderStorm(storm); curHeavy = false;   // single storm is never "heavy"
+    [t34,t64,trmw].forEach(b=> b.disabled=false);            // footprints always allowed for one storm
     const token = ++renderToken;                 // guard against out-of-order async renders
     if(pendingMsg){ window.__loadmsg.show(pendingMsg); pendingMsg=null; }
     else if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
@@ -970,6 +971,10 @@ window.__initViewer = function(){
     lastRender = ()=>showHistory(opts);
     const active = opts.storms;
     curHeavy = active.length > SWATH_MAX;   // skip footprints for big selections (slow + unreadable)
+    // Keep the checkboxes honest: for a too-heavy selection, uncheck AND disable them (so the
+    // boxes match the hidden footprints); otherwise leave them enabled for the user to toggle.
+    [t34,t64,trmw].forEach(b=> b.disabled = curHeavy);
+    if(curHeavy){ t34.checked=false; t64.checked=false; trmw.checked=false; applyToggles(); }
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
     window.__loadmsg.show(pendingMsg || ('Loading storms for '+opts.label+'…')); pendingMsg=null;
