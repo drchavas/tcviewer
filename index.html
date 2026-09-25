@@ -499,6 +499,9 @@ window.__initViewer = function(){
   const trmw = document.getElementById('trmw');
   const infoBox = document.getElementById('info');
   let curPts = null, curSel = null, curAtcf = '', curBasin = '', curULon = null;   // current storm state
+  let lastRender = null;       // re-invokes the current view (used when a footprint layer is toggled on)
+  let curHeavy = false;        // true when the current history selection has too many storms for footprints
+  const SWATH_MAX = 40;        // above this many active storms, skip wind-footprint swaths (slow + unreadable)
   // Unwrap a storm's longitudes so they run continuously across the dateline (…178,179,180,181…)
   // instead of jumping 179 → -179. Keeps tracks and wind-field polygons local near ±180 rather
   // than smearing across the whole map.
@@ -659,9 +662,19 @@ window.__initViewer = function(){
       else if(k==='size') el.innerHTML = '<span class="tsleg">'+sizeVals(p)+'</span>';   // colour key, plus values when a point is picked
     });
   }
-  t34.addEventListener('change', applyToggles);
-  t64.addEventListener('change', applyToggles);
-  trmw.addEventListener('change', applyToggles);
+  // Toggling a layer: show/hide the group; and if it was switched ON but its swaths were never
+  // built (we skip building hidden layers), rebuild the current view once to populate it.
+  function onToggle(){
+    const needBuild = !curHeavy && (
+         (t34.checked  && r34Group.getLayers().length===0)
+      || (t64.checked  && r64Group.getLayers().length===0)
+      || (trmw.checked && rmwGroup.getLayers().length===0));
+    applyToggles();
+    if(needBuild && lastRender) lastRender();
+  }
+  t34.addEventListener('change', onToggle);
+  t64.addEventListener('change', onToggle);
+  trmw.addEventListener('change', onToggle);
   applyToggles();   // put the (empty) radii groups on the map once
 
   function pointData(p){
@@ -709,8 +722,29 @@ window.__initViewer = function(){
       ${histsHtml(d)}</div>`;
   }
 
+  // Build the wind-footprint swaths for a storm's points — but only for layers whose legend
+  // checkbox is on, and never when the current selection is "heavy" (too many storms). Computing
+  // these unions is by far the slowest step, so skipping hidden/irrelevant ones is the big win.
+  function renderSwaths(pts, ulon){
+    const build=(kind, group, pane, style, on)=>{
+      if(!on || curHeavy) return;
+      const items = pts.map((p,i)=>{
+        const d=pointData(p);
+        let radii;
+        if(kind==='rmw') radii = (d.rmw!=null&&d.rmw>0) ? [d.rmw,d.rmw,d.rmw,d.rmw] : null;
+        else { const r = (kind==='r34') ? d.r34 : d.r64; radii = r.some(x=>x!=null&&x>0) ? r : null; }
+        return radii ? {lat:d.lat, lon:ulon[i], radii} : null;
+      });
+      try{ drawUnion(swathPolys(items), group, pane, style); }catch(e){ console.error(kind+' swath failed', e); }
+    };
+    build('r34', r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}, t34.checked);
+    build('r64', r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}, t64.checked);
+    build('rmw', rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}, trmw.checked);
+  }
+
   let renderToken = 0;
   async function renderStorm(storm){
+    lastRender = ()=>renderStorm(storm); curHeavy = false;   // single storm is never "heavy"
     const token = ++renderToken;                 // guard against out-of-order async renders
     if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
     let bdata;
@@ -765,18 +799,7 @@ window.__initViewer = function(){
     }
 
     // Wind-radii swaths (drawn last so a failure here can never hide the track).
-    // Each radius is ONE coherent swath: union of every timestep's area plus interpolated
-    // bridges. Rmax = a circle (equal radius in all quadrants).
-    const r34items=[], r64items=[], rmwitems=[];
-    for(let i=0;i<pts.length;i++){
-      const d = pointData(pts[i]), lon = ulon[i];
-      r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r34} : null);
-      r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r64} : null);
-      rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
-    }
-    try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
-    try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
-    try{ drawUnion(swathPolys(rmwitems), rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}); }catch(e){ console.error('Rmax swath failed', e); }
+    renderSwaths(pts, ulon);
 
     // peak intensity for subtitle
     let peak=-99, peakv=null;
@@ -935,7 +958,9 @@ window.__initViewer = function(){
   // Shared renderer for the history modes: draw the full track of every active storm,
   // ring the positions that fall in the selected window (opts.inHi), label & make clickable.
   async function showHistory(opts){
+    lastRender = ()=>showHistory(opts);
     const active = opts.storms;
+    curHeavy = active.length > SWATH_MAX;   // skip footprints for big selections (slow + unreadable)
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
     window.__loadmsg.show('Loading storms for '+opts.label+'…');
@@ -960,18 +985,8 @@ window.__initViewer = function(){
       count++;
       const ulon=unwrapLons(pts);                       // dateline-safe longitudes for this storm
       const trackLL=pts.map((p,i)=>[p[ix.lat],ulon[i]]);
-      // wind-radii swaths for the full track — same build as the single-storm view
-      // (added to the toggleable r34/r64/rmw groups, so the legend checkboxes control them)
-      const r34items=[], r64items=[], rmwitems=[];
-      for(let i=0;i<pts.length;i++){
-        const d=pointData(pts[i]), lon=ulon[i];
-        r34items.push(d.r34.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r34} : null);
-        r64items.push(d.r64.some(x=>x!=null&&x>0) ? {lat:d.lat,lon,radii:d.r64} : null);
-        rmwitems.push((d.rmw!=null&&d.rmw>0) ? {lat:d.lat,lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
-      }
-      try{ drawUnion(swathPolys(r34items), r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
-      try{ drawUnion(swathPolys(r64items), r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
-      try{ drawUnion(swathPolys(rmwitems), rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}); }catch(e){ console.error('Rmax swath failed', e); }
+      // wind-radii swaths for the full track (respect the legend checkboxes; skipped when heavy)
+      renderSwaths(pts, ulon);
       // full track rendered exactly like the single-storm view — coloured segments…
       for(let i=0;i<trackLL.length-1;i++){
         L.polyline([trackLL[i],trackLL[i+1]],{color:catColor(pts[i][ix.sshs]),weight:3,opacity:0.95}).addTo(dateLayer);
@@ -997,7 +1012,8 @@ window.__initViewer = function(){
     });
     if(!viewLocked) goGlobal();   // first entry → snap to global; locks the domain thereafter
     opts.subEl.style.display='block';
-    opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
+    const heavyNote = curHeavy ? ' &middot; <span style="color:#ffcf6b">wind footprints hidden (large selection)</span>' : '';
+    opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details${heavyNote}`
                                  : `<b>${opts.label}</b> &middot; ${opts.emptyText}`;
     window.__loadmsg.hide();   // hide only after the (blocking) render is done, so it stays up throughout
   }
