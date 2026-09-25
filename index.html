@@ -501,6 +501,7 @@ window.__initViewer = function(){
   let curPts = null, curSel = null, curAtcf = '', curBasin = '', curULon = null;   // current storm state
   let lastRender = null;       // re-invokes the current view (used when a footprint layer is toggled on)
   let curHeavy = false;        // true when the current history selection has too many storms for footprints
+  let pendingMsg = null;       // one-shot loading message for the next render (e.g. "Loading 34 kt wind footprints…")
   const SWATH_MAX = 40;        // above this many active storms, skip wind-footprint swaths (slow + unreadable)
   // Unwrap a storm's longitudes so they run continuously across the dateline (…178,179,180,181…)
   // instead of jumping 179 → -179. Keeps tracks and wind-field polygons local near ±180 rather
@@ -665,12 +666,15 @@ window.__initViewer = function(){
   // Toggling a layer: show/hide the group; and if it was switched ON but its swaths were never
   // built (we skip building hidden layers), rebuild the current view once to populate it.
   function onToggle(){
-    const needBuild = !curHeavy && (
-         (t34.checked  && r34Group.getLayers().length===0)
-      || (t64.checked  && r64Group.getLayers().length===0)
-      || (trmw.checked && rmwGroup.getLayers().length===0));
+    const turnOn=[];
+    if(t34.checked  && r34Group.getLayers().length===0) turnOn.push('34 kt');
+    if(t64.checked  && r64Group.getLayers().length===0) turnOn.push('64 kt');
+    if(trmw.checked && rmwGroup.getLayers().length===0) turnOn.push('Rmax');
     applyToggles();
-    if(needBuild && lastRender) lastRender();
+    if(!curHeavy && turnOn.length && lastRender){
+      pendingMsg = 'Loading '+turnOn.join(' & ')+' wind footprints…';
+      lastRender();
+    }
   }
   t34.addEventListener('change', onToggle);
   t64.addEventListener('change', onToggle);
@@ -746,7 +750,8 @@ window.__initViewer = function(){
   async function renderStorm(storm){
     lastRender = ()=>renderStorm(storm); curHeavy = false;   // single storm is never "heavy"
     const token = ++renderToken;                 // guard against out-of-order async renders
-    if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
+    if(pendingMsg){ window.__loadmsg.show(pendingMsg); pendingMsg=null; }
+    else if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
     let bdata;
     try{ bdata = await ensureBasin(storm.basin); }
     catch(e){ console.error(e); window.__loadmsg.show('Could not load '+basinName(storm.basin)+' data.'); return; }
@@ -876,6 +881,10 @@ window.__initViewer = function(){
     stormControls.style.display = hist  ? 'none' : '';
     if(hist){ tsEl.style.display='none'; }   // no lifecycle strip in the history modes
     else { viewLocked = false; }             // back to Single Storm → let it re-centre on the storm
+    // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/64 kt
+    // ON elsewhere. Rmax defaults off everywhere. The user can still toggle any layer after.
+    t34.checked = !range; t64.checked = !range; trmw.checked = false;
+    applyToggles();
   }
   modeSel.addEventListener('change', ()=>{
     const m = modeSel.value; applyMode(m);
@@ -963,7 +972,7 @@ window.__initViewer = function(){
     curHeavy = active.length > SWATH_MAX;   // skip footprints for big selections (slow + unreadable)
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
-    window.__loadmsg.show('Loading storms for '+opts.label+'…');
+    window.__loadmsg.show(pendingMsg || ('Loading storms for '+opts.label+'…')); pendingMsg=null;
     // let the message actually paint before we block on loading/rendering (two frames
     // guarantee a paint) — otherwise, with data cached, it would never become visible.
     await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
