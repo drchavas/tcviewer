@@ -90,6 +90,8 @@
   #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
            text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
   .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  #rangeHint{position:absolute;top:12px;left:272px;z-index:1000;background:rgba(22,33,46,.9);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:11.5px;color:var(--text);pointer-events:none;backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.3);white-space:nowrap}
+  #rangeHint .ring{display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid #fff;background:transparent;vertical-align:-1px;margin-right:6px}
   /* Cap each left panel to ~half the map height (scroll if taller) so the top-anchored
      controls and bottom-anchored legend can never overlap, at any browser zoom level. */
   #controls{top:10px;left:10px;width:250px;max-height:calc(50% - 16px);overflow-y:auto}
@@ -148,6 +150,7 @@
     /* data box: narrow panel docked lower-right (histograms match the text width) */
     #info{top:auto;bottom:8px;right:8px;left:auto;width:286px;max-width:calc(100vw - 16px);max-height:38%}
     #timeseries{display:none !important}   /* too cramped on small/short screens */
+    #rangeHint{display:none !important}    /* no room beside the controls on small screens */
   }
 </style>
 </head>
@@ -166,6 +169,7 @@
   <div id="left">
     <div id="mapwrap">
     <div id="map"></div>
+    <div id="rangeHint" style="display:none"></div>
     <div id="loadmsg">Loading…</div>
     <div id="info" class="ctl"></div>
     <details id="controls" class="ctl" open>
@@ -500,9 +504,7 @@ window.__initViewer = function(){
   const infoBox = document.getElementById('info');
   let curPts = null, curSel = null, curAtcf = '', curBasin = '', curULon = null;   // current storm state
   let lastRender = null;       // re-invokes the current view (used when a footprint layer is toggled on)
-  let curHeavy = false;        // true when the current history selection has too many storms for footprints
   let pendingMsg = null;       // one-shot loading message for the next render (e.g. "Loading 34 kt wind footprints…")
-  const SWATH_MAX = 40;        // above this many active storms, skip wind-footprint swaths (slow + unreadable)
   // Unwrap a storm's longitudes so they run continuously across the dateline (…178,179,180,181…)
   // instead of jumping 179 → -179. Keeps tracks and wind-field polygons local near ±180 rather
   // than smearing across the whole map.
@@ -671,7 +673,7 @@ window.__initViewer = function(){
     if(t64.checked  && r64Group.getLayers().length===0) turnOn.push('64 kt');
     if(trmw.checked && rmwGroup.getLayers().length===0) turnOn.push('Rmax');
     applyToggles();
-    if(!curHeavy && turnOn.length && lastRender){
+    if(turnOn.length && lastRender){
       pendingMsg = 'Loading '+turnOn.join(' & ')+' wind footprints…';
       lastRender();
     }
@@ -731,7 +733,7 @@ window.__initViewer = function(){
   // these unions is by far the slowest step, so skipping hidden/irrelevant ones is the big win.
   function renderSwaths(pts, ulon){
     const build=(kind, group, pane, style, on)=>{
-      if(!on || curHeavy) return;
+      if(!on) return;
       const items = pts.map((p,i)=>{
         const d=pointData(p);
         let radii;
@@ -748,8 +750,7 @@ window.__initViewer = function(){
 
   let renderToken = 0;
   async function renderStorm(storm){
-    lastRender = ()=>renderStorm(storm); curHeavy = false;   // single storm is never "heavy"
-    [t34,t64,trmw].forEach(b=> b.disabled=false);            // footprints always allowed for one storm
+    lastRender = ()=>renderStorm(storm);
     const token = ++renderToken;                 // guard against out-of-order async renders
     if(pendingMsg){ window.__loadmsg.show(pendingMsg); pendingMsg=null; }
     else if(!basinCache[storm.basin]) window.__loadmsg.show('Loading '+basinName(storm.basin)+' storms…');
@@ -886,6 +887,13 @@ window.__initViewer = function(){
     // ON elsewhere. Rmax defaults off everywhere. The user can still toggle any layer after.
     t34.checked = !range; t64.checked = !range; trmw.checked = false;
     applyToggles();
+    // map-area hint explaining the white rings, per history mode
+    const hint = document.getElementById('rangeHint');
+    const hintText = day ? "White circles = timesteps on the selected day"
+                   : month ? "White circles = timesteps in the selected month"
+                   : range ? "White circles = timesteps within the selected date range" : "";
+    if(hintText){ hint.innerHTML = '<span class="ring"></span>'+hintText; hint.style.display=''; }
+    else hint.style.display='none';
   }
   modeSel.addEventListener('change', ()=>{
     const m = modeSel.value; applyMode(m);
@@ -970,11 +978,6 @@ window.__initViewer = function(){
   async function showHistory(opts){
     lastRender = ()=>showHistory(opts);
     const active = opts.storms;
-    curHeavy = active.length > SWATH_MAX;   // skip footprints for big selections (slow + unreadable)
-    // Keep the checkboxes honest: for a too-heavy selection, uncheck AND disable them (so the
-    // boxes match the hidden footprints); otherwise leave them enabled for the user to toggle.
-    [t34,t64,trmw].forEach(b=> b.disabled = curHeavy);
-    if(curHeavy){ t34.checked=false; t64.checked=false; trmw.checked=false; applyToggles(); }
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
     window.__loadmsg.show(pendingMsg || ('Loading storms for '+opts.label+'…')); pendingMsg=null;
@@ -1026,8 +1029,7 @@ window.__initViewer = function(){
     });
     if(!viewLocked) goGlobal();   // first entry → snap to global; locks the domain thereafter
     opts.subEl.style.display='block';
-    const heavyNote = curHeavy ? ' &middot; <span style="color:#ffcf6b">wind footprints hidden (large selection)</span>' : '';
-    opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details${heavyNote}`
+    opts.subEl.innerHTML = count ? `<b>${opts.label}</b> &middot; ${count} tropical cyclone${count>1?'s':''} active (all basins) &middot; click a marker for details`
                                  : `<b>${opts.label}</b> &middot; ${opts.emptyText}`;
     window.__loadmsg.hide();   // hide only after the (blocking) render is done, so it stays up throughout
   }
