@@ -55,6 +55,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
@@ -243,6 +244,8 @@
       <label class="legrow" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="t34" checked><span class="sw" style="background:lightskyblue;opacity:.55"></span> Tropical storm force wind (34&nbsp;kt)</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t64" checked><span class="sw" style="background:#1f6dff;opacity:.55"></span> Hurricane force wind (64&nbsp;kt)</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
+      <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="tstates" checked><span class="sw" style="height:0;border:0;border-top:1.5px solid rgba(214,224,234,.8);border-radius:0"></span> U.S. state borders</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="tcounties" checked><span class="sw" style="height:0;border:0;border-top:1px solid rgba(214,224,234,.4);border-radius:0"></span> U.S. county borders<span id="ctyHint" style="color:var(--muted);font-size:10.5px;display:none">&nbsp;(zoom in)</span></label>
       <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analysed from ~2004 on; earlier storms often lack them.</div>
     </details>
     </div><!-- /#mapwrap -->
@@ -480,6 +483,57 @@ window.__initViewer = function(){
     L.polyline([[-85,lon],[85,lon]], {pane:'pgrat', interactive:false,
       color:'#ff4d4d', weight:1.2, opacity:0.75, dashArray:'5 5'}).addTo(map);
   });
+
+  // ---------- U.S. state & county borders (toggleable; default on) ----------
+  // Same Census cartographic-boundary TopoJSON as extremewx.org's scstrend page (geo/*.topo.json.gz,
+  // gzipped and decompressed in the browser). Drawn as meshes (each shared border once, no fills,
+  // non-interactive) on a canvas in their own pane: above the graticule, below footprints & tracks.
+  // Copies at ±360° so Alaska/Hawaii still have outlines when a storm is viewed on a wrapped
+  // map copy. Counties appear only from zoom 4 (at global scale 3,200 counties are just noise).
+  map.createPane('pborder'); map.getPane('pborder').style.zIndex = 260;
+  map.getPane('pborder').style.pointerEvents = 'none';
+  const borderRenderer = L.canvas({pane:'pborder', padding:0.5});
+  const COUNTY_MINZOOM = 4;
+  const tStates = document.getElementById('tstates');
+  const tCounties = document.getElementById('tcounties');
+  const ctyHint = document.getElementById('ctyHint');
+  let stateLines = null, countyLines = null;
+  async function gzJSON(url){
+    const r = await fetch(url); if(!r.ok) throw new Error(url+' ('+r.status+')');
+    const buf = await r.arrayBuffer();
+    try {   // served as application/gzip → decompress here
+      const st = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+      return JSON.parse(await new Response(st).text());
+    } catch(e){   // a host that already un-gzipped it (Content-Encoding) hands us plain JSON
+      return JSON.parse(new TextDecoder().decode(buf));
+    }
+  }
+  function meshLayer(topo, style){
+    const obj = topo.objects[Object.keys(topo.objects)[0]];
+    const mesh = topojson.mesh(topo, obj);            // MultiLineString, every arc once
+    const shift = dx => ({type:'MultiLineString',
+      coordinates: mesh.coordinates.map(line => line.map(([x,y]) => [x+dx, y]))});
+    return L.geoJSON({type:'GeometryCollection', geometries:[shift(-360), mesh, shift(360)]},
+      Object.assign({pane:'pborder', renderer:borderRenderer, interactive:false}, style));
+  }
+  function applyBorders(){
+    if(stateLines){ if(tStates.checked) stateLines.addTo(map); else map.removeLayer(stateLines); }
+    const zoomOK = map.getZoom() >= COUNTY_MINZOOM;
+    if(countyLines){ if(tCounties.checked && zoomOK) countyLines.addTo(map); else map.removeLayer(countyLines); }
+    ctyHint.style.display = (tCounties.checked && !zoomOK) ? '' : 'none';
+  }
+  tStates.addEventListener('change', applyBorders);
+  tCounties.addEventListener('change', applyBorders);
+  map.on('zoomend', applyBorders);
+  if(window.topojson && 'DecompressionStream' in window){
+    Promise.all([gzJSON('geo/counties.topo.json.gz'), gzJSON('geo/states.topo.json.gz')])
+      .then(([ctopo, stopo]) => {
+        countyLines = meshLayer(ctopo, {color:'#d6e0ea', weight:0.5, opacity:0.28});
+        stateLines  = meshLayer(stopo, {color:'#d6e0ea', weight:1.1, opacity:0.6});
+        applyBorders();
+      })
+      .catch(e => console.warn('U.S. borders unavailable:', e));
+  } else { applyBorders(); }
 
   // ---------- view lock ----------
   // The map auto-frames selections until the user takes control. The first time a date

@@ -34,6 +34,8 @@ the three history modes to explain the ringed positions.
 - `data/basin_<B>.json` — `{ sid: [points…] }` for one basin, fetched on demand and cached
   in memory (revisiting a basin is instant). The host CDN compresses these on the fly.
 - `process_storms.py`, `update_data.sh` — rebuild the data from IBTrACS.
+- `geo/states.topo.json.gz`, `geo/counties.topo.json.gz` — U.S. border TopoJSON (Census cartographic
+  boundaries), copied from extremewx.org's `scs/trends/geo/`; gzipped on disk, decompressed in the browser.
 - `CNAME` — custom domain for GitHub Pages.
 
 ## Update the data
@@ -93,6 +95,14 @@ Storm / Day / Month default 34 & 64 kt on, Rmax off. Turning a layer on rebuilds
 and shows a **"Loading 34 kt wind footprints…"** message (painted before the blocking rebuild, same
 trick the date-change message uses). The checkbox is the single source of truth — there is no
 hidden "too many storms" override.
+
+### U.S. state & county borders
+Two legend checkboxes (both default on). Drawn with `topojson.mesh` (each shared border once, no
+fills, non-interactive) on a canvas in pane `pborder` (z 260: above the graticule, below footprints
+and tracks), with copies at ±360° so Alaska/Hawaii keep outlines on wrapped map copies. Counties
+show only at zoom ≥ 4 (`COUNTY_MINZOOM`); below that the legend says "(zoom in)". The `.gz` files
+are fetched raw and un-gzipped with `DecompressionStream`, falling back to plain JSON if a host
+ever serves them with `Content-Encoding: gzip`.
 
 ## Basemap
 Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CARTO's key-free dark
