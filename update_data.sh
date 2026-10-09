@@ -26,6 +26,7 @@ fi
 if [ -n "$(git status --porcelain data 2>/dev/null)" ]; then
   git add -A data
   git commit -m "data refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+  git pull --rebase --autostash   # pick up the daily GitHub Action's data commits first
   git push
   echo "  → pushed updated data to GitHub (Pages will redeploy)"
 else
