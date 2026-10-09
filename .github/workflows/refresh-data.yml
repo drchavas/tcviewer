@@ -1,0 +1,74 @@
+# Daily IBTrACS refresh for tcviewer.org.
+# Runs on GitHub's servers: downloads the latest global IBTrACS CSV (not stored in the
+# repo), rebuilds data/*.json with process_storms.py, and commits data/ ONLY if storm data
+# actually changed (the "built" timestamp alone doesn't count). GitHub Pages then redeploys.
+# Can also be run by hand: repo → Actions → "Refresh IBTrACS data" → Run workflow.
+name: Refresh IBTrACS data
+
+on:
+  schedule:
+    - cron: "17 10 * * *"     # daily, 10:17 UTC (~6:17 am Eastern)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download IBTrACS and rebuild data/
+        run: python3 process_storms.py --update
+
+      - name: Check whether storm data changed
+        id: diff
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def load(src):
+              d = json.loads(src)
+              d.get("meta", {}).pop("built", None)
+              return d
+          old = subprocess.run(["git", "show", "HEAD:data/index.json"],
+                               capture_output=True, text=True).stdout
+          new = open("data/index.json").read()
+          index_changed = (not old) or load(old) != load(new)
+          basins_changed = subprocess.run(
+              ["git", "diff", "--quiet", "--", "data/", ":(exclude)data/index.json"]
+          ).returncode != 0
+          untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "data/"],
+                                     capture_output=True, text=True).stdout.strip() != ""
+          changed = index_changed or basins_changed or untracked
+          print("storm data changed:", changed)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"changed={'true' if changed else 'false'}\n")
+          PY
+
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "data refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Ask GitHub Pages to rebuild
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || true
