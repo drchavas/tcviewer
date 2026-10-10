@@ -128,38 +128,56 @@ const LAYERS = [
    get: c => c.w && c.w[0] > 0 ? POPOF(c) : null,
    bins:[1e4,3e4,1e5,3e5,1e6,3e6], labels:['10K+','30K+','100K+','300K+','1M+','3M+'], ramp:RAMP.pop,
    note:'Census 2024 estimates (today’s population) for counties reached by 39+ mph winds.'},
-  {k:'dens', short:'Population density', grp:'Background', bg:true, label:'Population density (people per square mile, by county)',
-   get: (c, g) => { const p = POP[g], a = CF[g] && CF[g].properties.AREA; return p != null && a ? p / (a / 2.58999) : null; },
-   bins:[10,25,50,100,250,500,1000,2500], ticks:['10','25','50','100','250','500','1K','2.5K+'], unit:'people / sq mi',
-   ramp:['#2c3138','#3b4149','#4d545e','#626a75','#7b838e','#98a0aa','#bac0c8','#e3e6ea'],
-   note:'Every U.S. county: Census 2024 population ÷ land area.'},
-  {k:'terrain', short:'Terrain', grp:'Background', bg:true, label:'Terrain (elevation, lower 48)',
-   note:'Shaded elevation from the AWS Terrain Tiles (USGS 3DEP / SRTM).'},
 ];
 let POPOF = () => null;
 const LBYK = Object.fromEntries(LAYERS.map(l => [l.k, l]));
-const GCOL = {Hazards:COL.haz, Impacts:COL.imp, Exposure:COL.exp, Background:'#c3c9d1'};
+const GCOL = {Hazards:COL.haz, Impacts:COL.imp, Exposure:COL.exp, Backdrop:'#c3c9d1'};
+/* Backdrops — the same menu as extremewx.org's scsdash: whole-map tiles underneath the county layers.
+   Topography is Esri's World_Physical_Map (hypsometric tint + relief; native to z8). Night lights are
+   NASA's VIIRS Black Marble (radiance, a proxy for where people are, not a population count). */
+const BASES = {
+  plain:{label:'Plain', url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+         maxNative:16, attr:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', light:false,
+         note:'Dark grey map'},
+  topo: {label:'Topography', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}',
+         maxNative:8, attr:'Physical map tiles &copy; Esri, U.S. National Park Service', light:true,
+         note:'Terrain: elevation tint and shaded relief (Esri World Physical Map)'},
+  lights:{label:'Night lights', url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
+         maxNative:8, attr:'Night lights: NASA GIBS &middot; VIIRS Black Marble (2016)', light:false,
+         note:'Where people are: city lights seen from space (NASA VIIRS Black Marble, 2016). Light, not a population count.'},
+  road: {label:'Highways', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+         maxNative:16, attr:'Street tiles &copy; Esri, HERE, Garmin', light:true,
+         note:'Roads, towns and place names (Esri World Street Map)'},
+};
 
 // ---------------------------------------------------------------- map
 const map = L.map('map', {worldCopyJump:false}).setView([32,-85], 5);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-  {attribution:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', maxZoom:16}).addTo(map);
+let base = BASES[new URLSearchParams(location.search).get('bg')] ? new URLSearchParams(location.search).get('bg') : 'plain';
+let baseTiles = null;
 const pane = (n, z, pe) => { map.createPane(n); map.getPane(n).style.zIndex = z; if(!pe) map.getPane(n).style.pointerEvents = 'none'; };
 pane('pbg', 250); pane('pfill', 300, true); pane('psel', 325); pane('pmesh', 320); pane('pswath', 330); pane('ptrack', 420); pane('ppts', 440, true);
 const fillR = L.canvas({pane:'pfill', padding:0.3});
 const meshR = L.canvas({pane:'pmesh', padding:0.3});
-L.geoJSON(topojson.mesh(ctopo, cObj), {pane:'pmesh', renderer:meshR, interactive:false,
+const cMesh = L.geoJSON(topojson.mesh(ctopo, cObj), {pane:'pmesh', renderer:meshR, interactive:false,
   style:{color:'#d6e0ea', weight:0.4, opacity:0.22}}).addTo(map);
-L.geoJSON(topojson.mesh(stopo, stopo.objects[Object.keys(stopo.objects)[0]]), {pane:'pmesh', renderer:meshR, interactive:false,
+const sMesh = L.geoJSON(topojson.mesh(stopo, stopo.objects[Object.keys(stopo.objects)[0]]), {pane:'pmesh', renderer:meshR, interactive:false,
   style:{color:'#d6e0ea', weight:1.1, opacity:0.6}}).addTo(map);
-let densLayer = null, fills = [], selLayer = null, ptsLayer = null, overLayer = L.layerGroup().addTo(map), terrainLayer = null;
-const TERRAIN = fetch('data/terrain_conus.json').then(r => r.ok ? r.json() : null).catch(() => null);
+function setBase(k){
+  base = BASES[k] ? k : 'plain'; const b = BASES[base];
+  if(baseTiles) map.removeLayer(baseTiles);
+  baseTiles = L.tileLayer(b.url, {attribution:b.attr, maxZoom:16, maxNativeZoom:b.maxNative}).addTo(map);
+  // light backdrops need dark lines
+  cMesh.setStyle(b.light ? {color:'#2b3440', weight:0.4, opacity:0.35} : {color:'#d6e0ea', weight:0.4, opacity:0.22});
+  sMesh.setStyle(b.light ? {color:'#1f2630', weight:1.2, opacity:0.75} : {color:'#d6e0ea', weight:1.1, opacity:0.6});
+  document.getElementById('map').classList.toggle('lightbase', !!b.light);
+}
+setBase(base);
+let fills = [], selLayer = null, ptsLayer = null, overLayer = L.layerGroup().addTo(map);
 
 // ---------------------------------------------------------------- state
 let S = null, cur = null, selC = null, sortK = null, sortDir = -1;
 const params = new URLSearchParams(location.search);
 let active = (params.get('layers') || params.get('layer') || 'wind').split(',').filter(k => LBYK[k] && !LBYK[k].bg);
-const bgOn = new Set((params.get('bg') || '').split(',').filter(k => LBYK[k] && LBYK[k].bg));
 let opac = Math.min(1, Math.max(0.15, (+params.get('op') || 75) / 100));
 
 // ---------------------------------------------------------------- picker
@@ -201,26 +219,31 @@ const sel = $('#stormSel'), q = $('#q');
     b.innerHTML = `<i style="background:${sw}"></i>${l.short}`;
     b.onclick = () => toggleLayer(l.k); gdiv.appendChild(b);
   }
+  const bdiv = document.createElement('div'); bdiv.className = 'lgrp';
+  bdiv.innerHTML = `<b style="color:${GCOL.Backdrop}">Backdrop</b>`; box.appendChild(bdiv);
+  for(const [k, b] of Object.entries(BASES)){
+    const c = document.createElement('button'); c.className = 'lchip bchip'; c.dataset.base = k; c.title = b.note;
+    c.innerHTML = `<i class="radio"></i>${b.label}`;
+    c.onclick = () => { setBase(k); drawOverlays(); renderLegend(); syncChips(); syncURL(); }; bdiv.appendChild(c);
+  }
   const op = $('#opac'); op.value = Math.round(opac * 100);
   op.addEventListener('input', () => { opac = op.value / 100; for(const f of fills) f.setStyle({fillOpacity:opac}); syncURL(); });
 }
 function toggleLayer(k){
   const l = LBYK[k];
-  if(l.bg){ bgOn.has(k) ? bgOn.delete(k) : bgOn.add(k); }
-  else {
-    if(layerUnavailable(l)) return;
-    if(active.includes(k)) active = active.filter(x => x !== k); else { active.push(k); sortK = null; }
-  }
+  if(layerUnavailable(l)) return;
+  if(active.includes(k)) active = active.filter(x => x !== k); else { active.push(k); sortK = null; }
   syncChips(); drawLayers(); renderTable(); syncURL();
 }
 function syncChips(){
-  document.querySelectorAll('.lchip').forEach(b => {
+  document.querySelectorAll('.bchip').forEach(b => b.classList.toggle('on', b.dataset.base === base));
+  document.querySelectorAll('.lchip:not(.bchip)').forEach(b => {
     const l = LBYK[b.dataset.k], u = layerUnavailable(l);
-    const on = l.bg ? bgOn.has(l.k) : active.includes(l.k);
+    const on = active.includes(l.k);
     b.classList.toggle('on', on); b.classList.toggle('dis', !!u);
     b.title = u ? `${l.short}: ${u} for this storm` : (l.note || '');
     const n = active.indexOf(l.k);
-    b.dataset.n = (!l.bg && active.length > 1 && n >= 0) ? n + 1 : '';
+    b.dataset.n = (active.length > 1 && n >= 0) ? n + 1 : '';
   });
 }
 
@@ -256,7 +279,7 @@ function syncURL(){
   if(!cur) return;
   const p = new URLSearchParams({storm:cur.slug});
   if(active.join(',') !== 'wind') p.set('layers', active.join(',') || 'none');
-  if(bgOn.size) p.set('bg', [...bgOn].join(','));
+  if(base !== 'plain') p.set('bg', base);
   if(Math.round(opac * 100) !== 75) p.set('op', Math.round(opac * 100));
   if(selC) p.set('county', selC);
   history.replaceState(null, '', '?' + p.toString());
@@ -357,11 +380,12 @@ function drawOverlays(){
   const sw = S.swaths || {};
   const drawSw = (k, style) => (sw[k] || []).forEach(poly =>
     L.polygon(poly.map(r => r.map(([x, y]) => [y, x])), Object.assign({pane:'pswath', interactive:false, fill:false}, style)).addTo(overLayer));
-  drawSw('r34', {color:'#cfe3f5', weight:1.2, opacity:0.55, dashArray:'5 5'});
-  drawSw('r64', {color:'#ffffff', weight:1.4, opacity:0.7});
+  const lt = BASES[base].light;
+  drawSw('r34', {color:lt ? '#1d2b3a' : '#cfe3f5', weight:1.2, opacity:lt ? 0.7 : 0.55, dashArray:'5 5'});
+  drawSw('r64', {color:lt ? '#0b1119' : '#ffffff', weight:1.4, opacity:lt ? 0.8 : 0.7});
   const ll = S.track.map(p => [p[1], p[2]]);
-  L.polyline(ll, {pane:'ptrack', color:'#0b1119', weight:5, opacity:0.6, interactive:false}).addTo(overLayer);
-  L.polyline(ll, {pane:'ptrack', color:'#ffffff', weight:2, opacity:0.9, interactive:false}).addTo(overLayer);
+  L.polyline(ll, {pane:'ptrack', color:lt ? '#ffffff' : '#0b1119', weight:5, opacity:lt ? 0.85 : 0.6, interactive:false}).addTo(overLayer);
+  L.polyline(ll, {pane:'ptrack', color:lt ? '#0b1119' : '#ffffff', weight:2, opacity:0.9, interactive:false}).addTo(overLayer);
   for(const p of S.track){
     if(p[0].slice(8) === '0000'){
       const d = utc(p[0]);
@@ -390,26 +414,14 @@ function colorOf(v, l){
   if(l.cat) return v == null ? null : l.ramp[v];
   const k = classOf(v, l.bins); return k < 0 ? null : l.ramp[k];
 }
-async function drawBg(){
-  const want = bgOn.has('terrain');
-  if(want && !terrainLayer){
-    const T = await TERRAIN; if(!T) return;
-    terrainLayer = L.imageOverlay('data/terrain_conus.png', T.bounds, {pane:'pbg', opacity:0.9, interactive:false});
-  }
-  if(terrainLayer){ if(bgOn.has('terrain')) terrainLayer.addTo(map); else map.removeLayer(terrainLayer); }
-}
 function drawLayers(){
   for(const f of fills) map.removeLayer(f);
   fills = [];
   if(selLayer){ map.removeLayer(selLayer); selLayer = null; }
   if(ptsLayer){ map.removeLayer(ptsLayer); ptsLayer = null; }
-  drawBg();
-  const order = [...(bgOn.has('dens') ? ['dens'] : []), ...active];      // density underneath, then in the order turned on
-  for(const k of order){
-    if(k === 'dens' && densLayer){ densLayer.setStyle({fillOpacity:opac}); fills.push(densLayer.addTo(map)); continue; }   // built once
+  for(const k of active){                                   // drawn in the order turned on
     const l = LBYK[k], fs = [];
-    const src = k === 'dens' ? Object.keys(CF) : Object.keys(S.counties);
-    for(const g of src){
+    for(const g of Object.keys(S.counties)){
       const col = colorOf(valOf(S.counties[g], l, g), l);
       if(col && CF[g]) fs.push({type:'Feature', properties:{g, col}, geometry:CF[g].geometry});
     }
@@ -419,7 +431,6 @@ function drawLayers(){
         lyr.bindTooltip(() => tipHtml(f.properties.g), {sticky:true, className:'tt'});
         lyr.on('click', () => selectCounty(f.properties.g));
       }}).addTo(map);
-    if(k === 'dens') densLayer = lyr;
     fills.push(lyr);
   }
   if(selC && CF[selC]) selLayer = L.geoJSON(CF[selC], {pane:'psel', interactive:false,
@@ -467,20 +478,13 @@ function legendSection(l){
   return `<div class="lsec"><div class="lt">${esc(l.short)} <span>${esc(l.unit || '')}</span></div><div class="lramp">`
     + l.ramp.map((c, i) => `<span><i style="background:${c}"></i><em>${l.ramp.length > 8 && i % 2 ? '&nbsp;' : l.ticks[i]}</em></span>`).join('') + `</div>${extra}</div>`;
 }
-async function renderLegend(){
+function renderLegend(){
   const secs = [...active].reverse().map(k => legendSection(LBYK[k]));
-  if(bgOn.has('dens')) secs.push(legendSection(LBYK.dens));
-  if(bgOn.has('terrain')){
-    const T = await TERRAIN;
-    if(T){
-      const ft = m => { const f = m * 3.28084; return f >= 1000 ? (f / 1000).toFixed(f >= 9500 ? 0 : 1).replace('.0', '') + 'K' : String(Math.round(f / 100) * 100); };
-      secs.push(legendSection({short:'Terrain', unit:'elevation, ft', ramp:T.colors, ticks:T.stops_m.map(ft)}));
-    }
-  }
-  if(!secs.length) secs.push('<div class="lsec"><div class="lt">No layers on</div></div>');
+  if(!secs.length) secs.push('<div class="lsec"><div class="lt">No data layers on</div></div>');
+  if(base !== 'plain') secs.push(`<div class="extra">Backdrop: ${esc(BASES[base].note)}</div>`);
   const lg = $('#legend');
   lg.innerHTML = '<button class="lhead" type="button">Legend <span>▾</span></button><div class="lbody">' + secs.join('')
-    + '<div class="extra">White line: track · dashed: 39+ mph wind area · solid: 74+ mph</div></div>';
+    + '<div class="extra">Line: track · dashed: 39+ mph wind area · solid: 74+ mph</div></div>';
   lg.querySelector('.lhead').onclick = () => lg.classList.toggle('min');
 }
 
@@ -501,12 +505,11 @@ function layerLine(k, c, g){
   if(k === 'inj') return c.se && (c.se.id + c.se.ii) ? `Injuries: ${deaths(c.se.id + c.se.ii)}` : '';
   if(k === 'dmg') return c.se && (c.se.pd + c.se.cd) ? `Damage: ${money(c.se.pd + c.se.cd)} reported` : '';
   if(k === 'pop') return c.w && POP[g] != null ? `Population: ${people(POP[g])} (2024)` : '';
-  if(k === 'dens'){ const v = valOf(c, l, g); return v != null ? `Density: ${n0(v)} people per sq mi` : ''; }
   return '';
 }
 function tipHtml(g){
   const c = S.counties[g] || {};
-  const keys = [...active].reverse(); if(bgOn.has('dens')) keys.push('dens');
+  const keys = [...active].reverse();
   const lines = keys.map(k => layerLine(k, c, g)).filter(Boolean);
   if(!S.counties[g]) lines.unshift('<span style="color:var(--muted)">outside this storm’s footprint</span>');
   return `<b>${esc(cname(g))}</b><br>${lines.join('<br>')}<br><span style="color:var(--muted)">click for everything in this county</span>`;
@@ -528,7 +531,7 @@ function renderCard(g){
   const c = S.counties[g] || {}, pop = POP[g];
   const h = [];
   h.push(`<button class="back" id="backBtn">← Storm overview</button>`);
-  const dens = valOf(c, LBYK.dens, g);
+  const area = CF[g] && CF[g].properties.AREA, dens = pop != null && area ? pop / (area / 2.58999) : null;
   h.push(`<h3>${esc(cname(g))}</h3><div class="csub">${pop ? people(pop) + ' people (2024)' : ''}${dens != null ? ' · ' + n0(dens) + ' per sq mi' : ''}</div>`);
   // hazards
   h.push(`<h4><i style="background:${COL.haz}"></i>Hazards</h4><table>`);

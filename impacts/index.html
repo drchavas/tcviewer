@@ -74,6 +74,8 @@
   .lopts label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
   #opac{width:120px;padding:0;accent-color:var(--accent)}
   .lhint{font-size:12px;color:var(--faint)}
+  .bchip i{border-radius:50%;background:transparent !important;border:1.5px solid #8899aa;opacity:1;box-shadow:none !important}
+  .bchip.on i{background:var(--accent) !important;border-color:var(--accent)}
   .mapbox{position:relative;height:620px}
   #map{position:absolute;inset:0;background:#0b1119}
   #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;width:300px;max-height:calc(100% - 20px);overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.35)}
@@ -188,7 +190,7 @@
       <div class="maptools">
         <div class="lbox" id="layerBox"></div>
         <div class="lopts"><label for="opac">Opacity</label><input id="opac" type="range" min="15" max="100" value="75">
-          <span class="lhint">Turn on as many layers as you like — each new one is drawn on top. Hover a layer name for its source.</span></div>
+          <span class="lhint">Turn on as many layers as you like — each new one is drawn on top. Hover a name for its source.</span></div>
       </div>
       <div class="mapbox"><div id="map"></div><div id="legend"></div><div class="loading" id="loading">Loading…</div></div>
     </div>
@@ -220,9 +222,9 @@
         <a href="https://github.com/DrJoMuller/CONUS-TC-Fatalities-1963-2024">dataset</a>. Atlantic storms, lower 48 states.</li>
       <li><b>Normalized damage</b> — Mooney et al. (2026) estimate for each continental U.S. hurricane landfall: the damage the storm would cause with today's housing stock, in 2024 dollars (via Klotzbach et al. 2026).</li>
       <li><b>Population</b> — U.S. Census Bureau Vintage 2024 county estimates: today's residents, not those at the time of the storm.
-        <b>Population density</b> divides that by each county's land area.</li>
-      <li><b>Terrain</b> — shaded elevation for the lower 48 from the <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a>
-        (USGS 3DEP, SRTM and other public elevation data, compiled by Mapzen).</li>
+</li>
+      <li><b>Backdrops</b> — Topography: Esri World Physical Map (elevation tint and shaded relief). Night lights: NASA GIBS VIIRS Black Marble (2016),
+        city lights seen from space — a guide to where people live, not a population count. Highways: Esri World Street Map. Plain: Esri dark grey canvas.</li>
     </ul>
     <p>Built by Dan Chavas (Purdue) · <a href="../">Track &amp; wind-field explorer</a> · <span id="built"></span></p>
   </section>

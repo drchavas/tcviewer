@@ -12,3 +12,6 @@ Icon?
 
 # build_impacts.py download cache (Storm Events, PRISM, USGS) — rebuildable, ~1.3 GB
 .impacts_cache/
+
+# files the Claude desktop app saves into this folder — never publish
+Claude outputs/

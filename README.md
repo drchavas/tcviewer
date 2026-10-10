@@ -133,13 +133,13 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   (133 as of Oct 2026). 2004 is when wind radii became routine.
 - **Layout**: header with landfall sentence(s) in local time → Hazards / Impacts / Exposure headline tiles →
   map with **layer chips that toggle independently and stack** (Hazards: wind, rain, flooding, tornadoes ·
-  Impacts: deaths, injuries, damage · Exposure: population · Background: population density for every county,
-  terrain) — each newly turned-on layer draws on top (numbered badges), one opacity slider, stacked compact
-  legend (collapsible), tooltip lists every active layer → storm-overview / county card (click a county) →
-  sortable county table (sorted by the newest layer) → sources. URL: `?storm=&layers=wind,rain&bg=dens,terrain&op=75&county=`.
-- **Terrain background**: `impacts/data/terrain_conus.png` (+ `.json` bounds/legend), a 3072×1792 Web-Mercator
-  PNG (0.4 MB) built by `build_impacts.py` from AWS Terrain Tiles (zoom 6): hypsometric colours × hillshade,
-  lower-48 counties only (ocean/Canada/Mexico transparent). Rebuild with `--terrain`.
+  Impacts: deaths, injuries, damage · Exposure: population) — each newly turned-on layer draws on top (numbered
+  badges), one opacity slider, stacked collapsible legend, tooltip lists every active layer — plus a one-of
+  **Backdrop** menu matching extremewx.org's scsdash: Plain (Esri dark grey canvas), Topography (Esri
+  World_Physical_Map, native z8), Night lights (NASA GIBS VIIRS Black Marble 2016, native z8), Highways (Esri
+  World_Street_Map). Light backdrops switch the track/outline/mesh colours to dark. → storm-overview / county
+  card (click a county) → sortable county table (sorted by the newest layer) → sources.
+  URL: `?storm=&layers=wind,rain&bg=topo&op=75&county=`.
 - **Main page link**: `../?sid=<IBTrACS SID>` opens that storm in the track explorer (added to index.html).
 
 ### Rebuilding the data: `python3 build_impacts.py`
