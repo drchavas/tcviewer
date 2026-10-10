@@ -16,6 +16,7 @@ Inputs (all public; cached under .impacts_cache/, which is git-ignored):
   rain      PRISM daily precipitation, 4 km (PRISM Group, Oregon State Univ.), CONUS only
   surge     USGS STN high-water marks (flood height above ground; coastal vs riverine),
             plus the peak observed / modeled surge per landfall from Klotzbach et al. (2026)
+  outages   DOE/ORNL EAGLE-I county customers without power, every 15 min, Nov 2014 on (Figshare, CC BY 4.0)
   impacts   NCEI Storm Events (county deaths, injuries, property & crop damage, tornadoes),
             Muller et al. (2026) CONUS direct-fatality database (deaths by state & cause),
             normalized damage per landfall (Mooney et al. 2026, via Klotzbach et al. 2026)
@@ -691,7 +692,10 @@ def rain_days(W):
 
 
 def prism_get(ymd):
-    return fetch(PRISM.format(ymd=ymd), os.path.join(CACHE, "prism", f"{ymd}.zip"), timeout=120)
+    p = fetch(PRISM.format(ymd=ymd), os.path.join(CACHE, "prism", f"{ymd}.zip"), timeout=120)
+    if p and not zipfile.is_zipfile(p):          # not published yet (PRISM returns an HTML/text error)
+        os.remove(p); return None
+    return p
 
 
 def prism_read(path):
@@ -789,6 +793,134 @@ def rain_stage(W, C, grid_holder):
 
 
 # ----------------------------------------------------------------------------------------------
+# Power outages: DOE/ORNL EAGLE-I county customers-out every 15 min, 2014-11 → (CC BY 4.0, Figshare)
+# ----------------------------------------------------------------------------------------------
+EAGLEI_ARTICLE = "https://api.figshare.com/v2/articles/24237376"
+OUT_BASE_DAYS = 4          # baseline = median customers out over [t0-4 d, t0-1 d] (routine outages)
+OUT_AFTER_DAYS = 12        # follow restoration this long after the storm leaves the U.S.
+
+
+def eaglei_index():
+    meta = json.loads(urllib.request.urlopen(urllib.request.Request(EAGLEI_ARTICLE, headers=UA), timeout=60).read())
+    files = {f["name"]: f["download_url"] for f in meta["files"]}
+    years = {int(m.group(1)): u for n, u in files.items() for m in [re.match(r"eaglei_outages_(\d{4})\.csv$", n)] if m}
+    return years, files.get("MCC.csv")
+
+
+def eaglei_mcc(url):
+    p = fetch(url, os.path.join(CACHE, "eaglei", "MCC.csv"))
+    out = {}
+    for i, line in enumerate(open(p, encoding="utf-8-sig")):
+        if i == 0:
+            continue
+        f = line.strip().split(",")
+        if len(f) >= 2 and f[0] and f[1]:
+            out[f[0].zfill(5)] = int(float(f[1]))
+    return out
+
+
+def storm_out_window(W):
+    t0 = tparse(W["t0"]); t1 = tparse(W["t1"])
+    return t0 - dt.timedelta(days=OUT_BASE_DAYS), t1 + dt.timedelta(days=OUT_AFTER_DAYS)
+
+
+def eaglei_extract(year, url, windows):
+    """Rows of one EAGLE-I year inside any storm window -> DataFrame(fips, out, t). Cached per year+windows."""
+    import pandas as pd, hashlib
+    key = hashlib.md5(repr(sorted(windows)).encode()).hexdigest()[:10]
+    cp = os.path.join(CACHE, "eaglei", f"extract_{year}_{key}.pkl")
+    if os.path.exists(cp):
+        return pd.read_pickle(cp)
+    raw = os.path.join(CACHE, "eaglei", f"eaglei_outages_{year}.csv")
+    if not fetch(url, raw, timeout=3600):
+        return None
+    ws = [(a.strftime("%Y-%m-%d %H:%M:%S"), b.strftime("%Y-%m-%d %H:%M:%S")) for a, b in windows]
+    hdr = open(raw).readline().strip().split(",")
+    oc = "customers_out" if "customers_out" in hdr else "sum"          # the 2023 file calls it "sum"
+    parts = []
+    for ch in pd.read_csv(raw, usecols=["fips_code", oc, "run_start_time"], chunksize=4_000_000,
+                          dtype={"fips_code": "int32", oc: "float32", "run_start_time": str}):
+        ch = ch.rename(columns={oc: "customers_out"})
+        t = ch["run_start_time"]
+        m = np.zeros(len(ch), bool)
+        for a, b in ws:
+            m |= ((t >= a) & (t <= b)).to_numpy()
+        if m.any():
+            c = ch[m]
+            parts.append(pd.DataFrame({"fips": c["fips_code"].to_numpy(), "out": c["customers_out"].fillna(0).to_numpy(),
+                                       "t": pd.to_datetime(c["run_start_time"], format="%Y-%m-%d %H:%M:%S")}))
+    df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame({"fips": [], "out": [], "t": []})
+    df.to_pickle(cp)
+    # keep only the small per-storm extract: drop older extracts of this year and (unless
+    # KEEP_EAGLEI_RAW is set) the 0.6–1.4 GB raw year file — it is re-downloaded only if the
+    # year's storm list changes
+    import glob
+    for old in glob.glob(os.path.join(CACHE, "eaglei", f"extract_{year}_*.pkl")):
+        if old != cp:
+            os.remove(old)
+    if not os.environ.get("KEEP_EAGLEI_RAW"):
+        os.remove(raw)
+    return df
+
+
+def outage_stage(W, X, mcc, keep):
+    """County peak outage, % of customers, customer-hours, restoration time; storm-wide hourly series."""
+    import pandas as pd
+    if X is None or not len(X):
+        return None
+    t0 = pd.Timestamp(tparse(W["t0"])).tz_localize(None); t1 = pd.Timestamp(tparse(W["t1"])).tz_localize(None)
+    b0, b1 = t0 - pd.Timedelta(days=OUT_BASE_DAYS), t0 - pd.Timedelta(days=1)
+    s0, s1 = t0 - pd.Timedelta(hours=12), t1 + pd.Timedelta(days=OUT_AFTER_DAYS)
+    sub = X[(X["t"] >= b0) & (X["t"] <= s1)]
+    if not len(sub):
+        return None
+    sub = sub.assign(g=sub["fips"].astype(int).astype(str).str.zfill(5))
+    sub = sub[sub["g"].isin(keep)]
+    if not len(sub):
+        return None
+    base = sub[(sub["t"] >= b0) & (sub["t"] <= b1)].groupby("g")["out"].median()
+    st = sub[(sub["t"] >= s0) & (sub["t"] <= s1)]
+    grid = pd.date_range(s0.ceil("15min"), s1.floor("15min"), freq="15min")
+    piv = st.pivot_table(index="t", columns="g", values="out", aggfunc="max").reindex(grid)
+    # EAGLE-I skips reports now and then: carry the last value across gaps up to 2 h (a missing
+    # report is not a restoration); longer absences mean no outages reported -> 0
+    piv = piv.ffill(limit=8).fillna(0)
+    # single-report spikes (counts briefly doubling) -> 75-min running median
+    piv = piv.rolling(5, center=True, min_periods=1).median()
+    piv = (piv - base.reindex(piv.columns).fillna(0)).clip(lower=0)
+    on0, on1 = t0 - pd.Timedelta(hours=12), t1 + pd.Timedelta(hours=48)
+    cty = {}
+    for g in piv.columns:
+        v = piv[g].to_numpy(); k = int(v.argmax()); pk = float(v[k])
+        n = mcc.get(g)
+        if n:
+            pk = min(pk, float(n)); v = np.minimum(v, n)
+        if pk < 100 or (n and pk < 0.01 * n):
+            continue
+        if not (on0 <= grid[k] <= on1):          # peak while this storm was over the U.S. (+2 d)
+            continue
+        after = np.nonzero(v[k:] < 0.1 * pk)[0]
+        rest_h = round(after[0] * 0.25, 1) if len(after) else None
+        cty[g] = {"pk": int(pk), "pct": None if not n else round(min(1.0, pk / n), 4),
+                  "ch": int(v.sum() * 0.25), "t": grid[k].strftime("%Y%m%d%H%M"), "rest": rest_h,
+                  "cens": None if len(after) else round((len(v) - k) * 0.25, 1)}
+    if not cty:
+        return None
+    tot = piv[list(cty)].clip(upper=pd.Series({g: mcc.get(g, np.inf) for g in cty}), axis=1).sum(axis=1).resample("1h").max()
+    pk_i = int(tot.to_numpy().argmax())
+    vals = tot.to_numpy()
+    nz = np.nonzero(vals >= 0.01 * vals.max())[0]
+    i0, i1 = (nz[0], nz[-1] + 1) if len(nz) else (0, len(vals))
+    i0 = max(0, i0 - 6)
+    return {"cty": cty, "series": {"t0": tot.index[i0].strftime("%Y%m%d%H%M"), "step_h": 1,
+                                    "v": [int(round(x, -1)) for x in vals[i0:i1]]},
+            "peak": {"n": int(vals[pk_i]), "t": tot.index[pk_i].strftime("%Y%m%d%H%M")},
+            "cust_hours": int(sum(c["ch"] for c in cty.values())),
+            "n10": sum(1 for c in cty.values() if c["pct"] and c["pct"] >= 0.10),
+            "years": [int(W["t0"][:4])]}
+
+
+# ----------------------------------------------------------------------------------------------
 # assemble
 # ----------------------------------------------------------------------------------------------
 def r1(x, n=2):
@@ -799,6 +931,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", nargs="*", help="slugs to (re)build, e.g. helene-2024")
     ap.add_argument("--skip-rain", action="store_true")
+    ap.add_argument("--skip-outages", action="store_true", help="skip EAGLE-I power outages (~13 GB download)")
     a = ap.parse_args()
     os.makedirs(os.path.join(OUT, "storms"), exist_ok=True)
     log("counties…"); C = Counties()
@@ -829,6 +962,24 @@ def main():
             for i, _ in enumerate(ex.map(prism_get, need)):
                 if i % 50 == 49:
                     log(f"  {i+1}/{len(need)}")
+    # power outages: extract each EAGLE-I year once for all of that year's storm windows
+    OUTX, MCC = {}, {}
+    if not a.skip_outages:
+        try:
+            ey, mcc_url = eaglei_index(); MCC = eaglei_mcc(mcc_url)
+            byyear = defaultdict(list)
+            for s in todo:
+                w0, w1 = storm_out_window(s["W"])
+                if w0.year in ey:
+                    byyear[w0.year].append((w0, w1))
+            for y in sorted(byyear):
+                log(f"EAGLE-I {y}: extracting {len(byyear[y])} storm windows…")
+                try:
+                    OUTX[y] = eaglei_extract(y, ey[y], byyear[y])
+                except Exception as e:
+                    log(f"  EAGLE-I {y} skipped: {e}")
+        except Exception as e:
+            log(f"  power outages skipped: {e}")
     gh = {}
     index = []
     old = {}
@@ -864,6 +1015,17 @@ def main():
             rain_out = {k: rain[k] for k in ("days", "peak", "grid")}
         else:
             rain_out = None
+        outage = None
+        w0, _ = storm_out_window(W)
+        if w0.year in OUTX:
+            try:
+                keep = {g for g, v in cty.items() if v.get("w") or v.get("se") or v.get("h") or (v.get("r") and v["r"][1] >= 1.0)}
+                outage = outage_stage(W, OUTX[w0.year], MCC, keep)
+            except Exception as e:
+                log(f"    outages failed: {e}")
+        if outage:
+            for g, v in outage.pop("cty").items():
+                cty.setdefault(g, {})["o"] = v
         atcf = (s.get("atcf") or "").upper()
         mul = MUL.get(atcf); klo = KLO.get(atcf, [])
         smax = max([p["sshs"] for p in P if p["sshs"] is not None] or [-1])
@@ -880,6 +1042,7 @@ def main():
             "landfalls": lf, "counties": cty,
             "hwm": stn["pts"] if stn else [], "stn_event": stn["event"] if stn else None,
             "tor": tors, "rain": rain_out, "se": se_t, "fatalities": mul, "landfall_table": klo,
+            "outage": outage,
         }
         with open(os.path.join(OUT, "storms", s["slug"] + ".json"), "w") as f:
             json.dump(rec, f, separators=(",", ":"))
@@ -898,6 +1061,7 @@ def main():
             "dmg_norm": dmg, "dmg_se": (se_t["pd"] + se_t["cd"]) if se_t else None,
             "rain": rain["peak"]["in"] if rain else None, "surge_m": surge, "hwm_ft": hwmx, "hwm_elev": hwme,
             "tor": se_t["tor"] if se_t else 0,
+            "out_peak": outage["peak"]["n"] if outage else None,
         })
     index.sort(key=lambda x: (x["t"][0]), reverse=True)
     with open(ip, "w") as f:

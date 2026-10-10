@@ -124,6 +124,12 @@ const LAYERS = [
    get: c => c.se ? (c.se.pd + c.se.cd) || null : null,
    bins:[1e4,1e5,1e6,1e7,1e8,1e9], labels:['$10K+','$100K+','$1M+','$10M+','$100M+','$1B+'], ramp:RAMP.dmg,
    note:'Damage as reported to NCEI at the time (not inflation-adjusted; often incomplete).', needs:'se'},
+  {k:'out', short:'Power outages', ticks:['1%','5%','10%','25%','50%','75%+'], unit:'peak % of customers out', grp:'Impacts',
+   label:'Power outages — peak share of customers without power (EAGLE-I)',
+   get: c => c.o ? (c.o.pct ?? null) : null,
+   bins:[0.01,0.05,0.10,0.25,0.50,0.75], labels:['1%+','5%+','10%+','25%+','50%+','75%+'],
+   ramp:['#4a2610','#6e3512','#9a4814','#c65f17','#ee7d22','#ffab5c'],
+   note:'DOE/ORNL EAGLE-I: highest share of a county\u2019s customers without power while the storm was over the U.S. (2015 on).', needs:'out'},
   {k:'pop', short:'Population', ticks:['10K','30K','100K','300K','1M','3M+'], unit:'people', grp:'Exposure', label:'Population of counties in the wind field',
    get: c => c.w && c.w[0] > 0 ? POPOF(c) : null,
    bins:[1e4,3e4,1e5,3e5,1e6,3e6], labels:['10K+','30K+','100K+','300K+','1M+','3M+'], ramp:RAMP.pop,
@@ -318,6 +324,7 @@ function layerUnavailable(l){
   if(l.needs === 'hwm' && !(S.hwm && S.hwm.length)) return 'not surveyed';
   if(l.needs === 'tor' && !(S.se && S.se.tor)) return 'none reported';
   if(l.needs === 'se' && !S.se) return 'no reports';
+  if(l.needs === 'out' && !S.outage) return S.year < 2015 ? 'from 2015 on' : 'no data';
   return null;
 }
 function syncURL(){
@@ -397,8 +404,13 @@ function renderTiles(){
   if(dn) I.push(tile(money(dn, true), 'Damage, normalized to today', '2024 $ · Mooney et al. 2026'));
   else if(S.se) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
   else I.push(tile('—', 'Damage', 'no reports', true));
+  if(S.outage){
+    const pk = S.outage.peak, d = utc(pk.t);
+    I.push(tile(people(pk.n, true), 'Peak customers without power',
+      `${d.toLocaleString('en-US', {month:'short', day:'numeric', timeZone:'UTC'}).replace('Sep ', 'Sept ')} · EAGLE-I`));
+  }
   if(S.se) I.push(tile(n0(S.se.id + S.se.ii), 'Injuries reported', 'Storm Events'));
-  if(S.se && S.fatalities) I.push(tile(n0(S.se.dd + S.se.di), 'Deaths in county reports', `${n0(S.se.dd)} direct · ${n0(S.se.di)} indirect`));
+  if(S.se && S.fatalities && !S.outage) I.push(tile(n0(S.se.dd + S.se.di), 'Deaths in county reports', `${n0(S.se.dd)} direct · ${n0(S.se.di)} indirect`));
   else if(S.se && dn) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
   t.push(group('Impacts', COL.imp, I));
   // exposure
@@ -552,6 +564,7 @@ function layerLine(k, c, g){
   if(k === 'inj') return c.se && (c.se.id + c.se.ii) ? `Injuries: ${deaths(c.se.id + c.se.ii)}` : '';
   if(k === 'dmg') return c.se && (c.se.pd + c.se.cd) ? `Damage: ${money(c.se.pd + c.se.cd)} reported` : '';
   if(k === 'pop') return c.w && POP[g] != null ? `Population: ${people(POP[g])} (2024)` : '';
+  if(k === 'out') return c.o ? `Power out at peak: ${outTxt(c.o)}` : '';
   return '';
 }
 function tipHtml(g){
@@ -560,6 +573,12 @@ function tipHtml(g){
   const lines = keys.map(k => layerLine(k, c, g)).filter(Boolean);
   if(!S.counties[g]) lines.unshift('<span style="color:var(--muted)">outside this storm’s footprint</span>');
   return `<b>${esc(cname(g))}</b><br>${lines.join('<br>')}<br><span style="color:var(--muted)">click for everything in this county</span>`;
+}
+const days = hrs => hrs < 48 ? `${Math.round(hrs)} hours` : `${(hrs / 24).toFixed(1)} days`;
+function outTxt(o){
+  const pc = o.pct != null ? `${Math.round(o.pct * 100)}% of customers (${people(o.pk, true)})` : `${people(o.pk, true)} customers`;
+  const r = o.rest != null ? `, back under 10% of that after ${days(o.rest)}` : o.cens != null ? `, still above 10% after ${days(o.cens)}` : '';
+  return pc + r;
 }
 function fl(h){
   const a = [];
@@ -597,6 +616,14 @@ function renderCard(g){
   if(c.se && c.se.tor) h.push(row('Tornadoes', `${c.se.tor}${c.se.ef >= 0 ? ' (strongest EF' + c.se.ef + ')' : ''}`));
   h.push('</table>');
   // impacts
+  if(c.o){
+    const lt = utc(c.o.t), tz = tzOf(g, CF[g] ? CF[g].properties.STUSPS : '');
+    h.push(`<h4><i style="background:${COL.imp}"></i>Power outages (EAGLE-I)</h4><table>`,
+      row('Peak without power', `${people(c.o.pk)}${c.o.pct != null ? ' · ' + Math.round(c.o.pct * 100) + '% of customers' : ''}`),
+      row('Peak at', localTime(c.o.t, tz)),
+      row('Back under 10% of peak', c.o.rest != null ? `after ${days(c.o.rest)}` : c.o.cens != null ? `not within ${days(c.o.cens)}` : '—'),
+      row('Customer-hours without power', n0(c.o.ch)), '</table>');
+  } else if(S.outage) h.push(`<h4><i style="background:${COL.imp}"></i>Power outages (EAGLE-I)</h4><div class="note">No storm-period outage above 1% of customers recorded here.</div>`);
   h.push(`<h4><i style="background:${COL.imp}"></i>Impacts (NCEI Storm Events)</h4>`);
   if(c.se){
     h.push('<table>', row('Deaths', `${deaths(c.se.dd)} direct · ${deaths(c.se.di)} indirect`),
@@ -608,6 +635,47 @@ function renderCard(g){
   } else h.push('<div class="note">No Storm Events reports tied to this storm in this county.</div>');
   $('#card').innerHTML = h.join('');
   $('#backBtn').onclick = () => { selC = null; drawLayers(); renderSummary(); renderTable(); syncURL(); };
+}
+function outageChart(){
+  const O = S.outage, v = O.series.v, n = v.length;
+  if(n < 2) return '';
+  const W = 340, H = 120, L = 6, R = 6, T = 14, B = 20, max = Math.max(...v) || 1;
+  const t0 = utc(O.series.t0).getTime(), step = O.series.step_h * 3600e3;
+  const X = i => L + (W - L - R) * i / (n - 1), Y = x => T + (H - T - B) * (1 - x / max);
+  let d = `M${X(0)},${Y(v[0])}`; for(let i = 1; i < n; i++) d += `L${X(i).toFixed(1)},${Y(v[i]).toFixed(1)}`;
+  const area = d + `L${X(n - 1)},${Y(0)}L${X(0)},${Y(0)}Z`;
+  // day ticks at 00 UTC
+  let ticks = '';
+  const first = Math.ceil(t0 / 86400e3) * 86400e3, span = (n - 1) * step, every = span > 10 * 86400e3 ? 4 : span > 5 * 86400e3 ? 2 : 1;
+  for(let t = first, k = 0; t <= t0 + span; t += 86400e3, k++){
+    if(k % every) continue;
+    const x = L + (W - L - R) * (t - t0) / span, lab = new Date(t).toLocaleString('en-US', {month:'short', day:'numeric', timeZone:'UTC'});
+    ticks += `<line x1="${x}" x2="${x}" y1="${H - B}" y2="${H - B + 3}" stroke="var(--faint)"/><text x="${x}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+  }
+  const pi = v.indexOf(max);
+  return `<h4><i style="background:${COL.imp}"></i>Customers without power</h4>
+    <div class="ochart" data-t0="${t0}" data-step="${step}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+      aria-label="Customers without power over time, peaking at ${people(max)}">
+      <line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/>
+      <path d="${area}" fill="#ee7d22" fill-opacity=".18"/><path d="${d}" fill="none" stroke="#ee7d22" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <circle cx="${X(pi)}" cy="${Y(max)}" r="3" fill="#ee7d22"/>
+      <text x="${Math.min(X(pi) + 5, W - 70)}" y="${Math.max(Y(max) - 3, 10)}" class="pk">${people(max, true)} peak</text>
+      ${ticks}<line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="2 2" visibility="hidden"/>
+    </svg><div class="otip"></div></div>
+    <div class="note">Summed over the counties the storm affected, after removing routine outages (EAGLE-I covers most but not all utilities${S.year <= 2017 ? '; coverage was patchier before 2018' : ''}${cur.states.includes('PR') ? '; Puerto Rico is not covered' : ''}).</div>`;
+}
+function wireOutageChart(){
+  const box = document.querySelector('#card .ochart'); if(!box) return;
+  const svg = box.querySelector('svg'), tip = box.querySelector('.otip'), xh = svg.querySelector('.xh');
+  const v = S.outage.series.v, t0 = +box.dataset.t0, step = +box.dataset.step;
+  svg.addEventListener('mousemove', e => {
+    const r = svg.getBoundingClientRect(), f = Math.min(1, Math.max(0, (e.clientX - r.left - r.width * 6 / 340) / (r.width * 328 / 340)));
+    const i = Math.round(f * (v.length - 1)), x = 6 + 328 * i / (v.length - 1);
+    xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
+    const t = new Date(t0 + i * step).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', timeZone:'UTC'});
+    tip.textContent = `${people(v[i])} without power · ${t} UTC`; tip.style.visibility = 'visible';
+  });
+  svg.addEventListener('mouseleave', () => { xh.setAttribute('visibility', 'hidden'); tip.style.visibility = 'hidden'; });
 }
 function renderSummary(){
   const h = [];
@@ -626,6 +694,7 @@ function renderSummary(){
     }
     h.push(`<div class="note">${F.total} direct deaths in the lower 48 (Muller et al. 2026). Indirect deaths (e.g. heat, accidents, carbon monoxide) are not included.</div>`);
   }
+  if(S.outage) h.push(outageChart());
   const K = S.landfall_table || [];
   if(K.length){
     h.push(`<h4><i style="background:${COL.imp}"></i>Damage & surge by landfall</h4><table>`);
@@ -655,8 +724,10 @@ function renderSummary(){
   h.push(top({t:'Deepest flooding (above ground)', c:COL.haz}, c => c.h ? Math.max(c.h.hc ?? -1, c.h.hr ?? -1) : null, v => v.toFixed(1) + ' ft'));
   h.push(top({t:'Most deaths (Storm Events)', c:COL.imp}, c => c.se ? c.se.dd + c.se.di : null, v => deaths(v)));
   h.push(top({t:'Most damage (Storm Events)', c:COL.imp}, c => c.se ? c.se.pd + c.se.cd : null, v => money(v, true)));
+  h.push(top({t:'Most customers without power', c:COL.imp}, c => c.o ? c.o.pk : null, v => people(v, true)));
   $('#card').innerHTML = h.join('');
   $('#card').querySelectorAll('.toplist button').forEach(b => b.onclick = () => selectCounty(b.dataset.g));
+  wireOutageChart();
 }
 
 // ---------------------------------------------------------------- table
@@ -669,10 +740,11 @@ const COLS = [
   {k:'tor', t:'Tornadoes', grp:'Hazards', get:(g, c) => c.se ? c.se.tor : null, fmt:v => v ? v : '—'},
   {k:'dead', t:'Deaths', grp:'Impacts', get:(g, c) => c.se ? c.se.dd + c.se.di : null, fmt:v => v ? deaths(v) : '—'},
   {k:'inj', t:'Injuries', grp:'Impacts', get:(g, c) => c.se ? c.se.id + c.se.ii : null, fmt:v => v ? deaths(v) : '—'},
+  {k:'out', t:'Power out', grp:'Impacts', get:(g, c) => c.o ? (c.o.pct ?? null) : null, fmt:v => v == null ? '—' : Math.round(v * 100) + '%'},
   {k:'dmg', t:'Damage', grp:'Impacts', get:(g, c) => c.se ? c.se.pd + c.se.cd : null, fmt:v => v ? money(v, true) : '—'},
   {k:'pop', t:'Population', grp:'Exposure', get:g => POP[g] ?? null, fmt:v => v == null ? '—' : people(v, true)},
 ];
-const L2C = {wind:'wind', rain:'rain', flood:'flood', tor:'tor', dead:'dead', inj:'inj', dmg:'dmg', pop:'pop'};
+const L2C = {wind:'wind', rain:'rain', flood:'flood', tor:'tor', dead:'dead', inj:'inj', out:'out', dmg:'dmg', pop:'pop'};
 $('#tfilter').addEventListener('input', renderTable);
 function renderTable(){
   if(!S) return;
@@ -690,7 +762,7 @@ function renderTable(){
   });
   const MAX = 400;
   $('#tcount').textContent = `${rows.length} counties with data` + (rows.length > MAX ? ` · showing top ${MAX}` : '');
-  const grp = `<tr><th class="grp"></th><th class="grp" colspan="4" style="color:${COL.haz}">Hazards</th><th class="grp" colspan="3" style="color:${COL.imp}">Impacts</th><th class="grp" style="color:${COL.exp}">Exposure</th></tr>`;
+  const grp = `<tr><th class="grp"></th><th class="grp" colspan="4" style="color:${COL.haz}">Hazards</th><th class="grp" colspan="4" style="color:${COL.imp}">Impacts</th><th class="grp" style="color:${COL.exp}">Exposure</th></tr>`;
   const head = '<tr>' + COLS.map(c => `<th data-k="${c.k}" class="${c.k === sk ? 'sorted' : ''}">${c.t}${c.k === sk ? (sortDir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('') + '</tr>';
   const body = rows.slice(0, MAX).map(r => `<tr data-g="${r.g}" class="${r.g === selC ? 'sel' : ''}">` +
     COLS.map((c, i) => { const s = c.fmt(r.v[i], r.g, r.c); return `<td class="${s === '—' ? 'z' : ''}">${s}</td>`; }).join('') + '</tr>').join('');

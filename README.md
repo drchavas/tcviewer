@@ -146,7 +146,7 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   (133 as of Oct 2026). 2004 is when wind radii became routine.
 - **Layout**: header with landfall sentence(s) in local time → Hazards / Impacts / Exposure headline tiles →
   map with **layer chips that toggle independently and stack** (Hazards: wind, rain, flooding, tornadoes ·
-  Impacts: deaths, injuries, damage · Exposure: population) — each newly turned-on layer draws on top (numbered
+  Impacts: deaths, injuries, damage, power outages · Exposure: population) — each newly turned-on layer draws on top (numbered
   badges), one opacity slider, stacked collapsible legend, tooltip lists every active layer — plus a one-of
   **Backdrop** set (same sources as extremewx.org's scsdash) that toggle independently and blend, over an
   always-on Esri dark grey canvas: Topography (Esri World_Physical_Map, native z8), Night lights (NASA GIBS
@@ -170,6 +170,7 @@ Downloads are cached in `.impacts_cache/` (git-ignored; ~1.3 GB, mostly PRISM). 
 | Deaths, injuries, damage, tornadoes | NCEI Storm Events details files | (a) tropical-storm/hurricane/TD/storm-surge reports within 24 h of the U.S. period and 400 km of the track, or (b) any report whose narrative names the storm in a tropical context, within −48 h/+120 h and 1200 km. One storm per report (name match wins, then distance). Zone reports → counties via NWS zone–county correlation (`bp16ap26.dbx`, name fallback), split evenly. Puerto Rico's pre-2023 zones don't map, so PR reports count in totals but not on the map |
 | Direct deaths by cause/state | Muller et al. (2026) GitHub dataset | by ATCF id; lower 48, Atlantic only |
 | Normalized damage, peak surge | Klotzbach et al. (2026) supp. table (Mooney et al. 2026 damage) | by ATCF id; CONUS hurricane landfalls |
+| Power outages | DOE/ORNL EAGLE-I (Figshare 24237376, CC BY 4.0): county customers out every 15 min, Nov 2014–2025 (~13 GB raw; the 2023 file names the column `sum`) | each year is streamed once and cut to its storms' windows ([U.S. arrival − 4 d, departure + 12 d]); the raw file is then deleted (set `KEEP_EAGLEI_RAW=1` to keep it) and only the small extract cached. Per county: gaps ≤ 2 h forward-filled (a missing report isn't a restoration), 75-min running median (single-report spikes), routine pre-storm outages (median of days −4…−1) subtracted, capped at EAGLE-I's modeled customer count. Counted if the peak falls between 12 h before U.S. arrival and 2 d after departure, is ≥ 100 customers and ≥ 1 %, in a county the storm touched (wind, ≥ 1 in rain, Storm Events or high-water marks). Stored: peak, % of customers, customer-hours, hours until back under 10 % of peak; plus an hourly storm-wide total. Checks: Irma 7.1 M peak, Milton 3.2 M, Ian 2.5 M, Ida 1.1 M, Beryl 2.7 M. Coverage gaps: Puerto Rico in early years, parts of coastal Texas in 2017 (Harvey undercounted); nothing before 2015 or for the current year until EAGLE-I publishes it |
 | Population | `geo/county_pop.json` (Census V2024) | counties in the 34-kt area |
 
 ## Basemap
