@@ -92,7 +92,7 @@ zoom.
 Building the swath unions (polygon-clipping) is by far the slowest step, so **only checked layers
 are built** — hidden layers cost nothing (previously Rmax was computed on every load despite being
 off by default). **Range mode defaults all footprint boxes off** for a fast initial load; Single
-Storm / Day / Month default 34, 50 & 64 kt on (50 kt added 2026-10), Rmax off. Turning a layer on rebuilds the current view
+Storm / Day / Month default 34 & 64 kt on; 50 kt (added 2026-10) and Rmax default off. Turning a layer on rebuilds the current view
 and shows a **"Loading 34 kt wind footprints…"** message (painted before the blocking rebuild, same
 trick the date-change message uses). The checkbox is the single source of truth — there is no
 hidden "too many storms" override.

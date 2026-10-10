@@ -242,7 +242,7 @@
       <summary>Legend &amp; layers</summary>
       <div id="catLegend"></div>
       <label class="legrow" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="t34" checked><span class="sw" style="background:lightskyblue;opacity:.55"></span> Tropical storm force wind (34&nbsp;kt)</label>
-      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t50" checked><span class="sw" style="background:#4d9bff;opacity:.55"></span> Storm force wind (50&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t50"><span class="sw" style="background:#4d9bff;opacity:.55"></span> 50&nbsp;kt wind</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t64" checked><span class="sw" style="background:#1f6dff;opacity:.55"></span> Hurricane force wind (64&nbsp;kt)</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
       <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="tstates" checked><span class="sw" style="height:0;border:0;border-top:1.5px solid rgba(214,224,234,.8);border-radius:0"></span> U.S. state borders</label>
@@ -976,9 +976,9 @@ window.__initViewer = function(){
     stormControls.style.display = hist  ? 'none' : '';
     if(hist){ tsEl.style.display='none'; }   // no lifecycle strip in the history modes
     else { viewLocked = false; }             // back to Single Storm → let it re-centre on the storm
-    // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/50/64 kt
-    // ON elsewhere. Rmax defaults off everywhere. The user can still toggle any layer after.
-    t34.checked = !range; t50.checked = !range; t64.checked = !range; trmw.checked = false;
+    // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/64 kt
+    // ON elsewhere. 50 kt and Rmax default off everywhere. The user can still toggle any layer after.
+    t34.checked = !range; t50.checked = false; t64.checked = !range; trmw.checked = false;
     applyToggles();
     // map-area hint explaining the white rings, per history mode
     const hint = document.getElementById('rangeHint');
