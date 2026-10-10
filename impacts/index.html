@@ -58,13 +58,37 @@
 
   .mapsec{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;margin-top:12px}
   .mapcol{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
-  .maptools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
-  .maptools label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
-  #layerSel{min-width:280px}
-  .maptools .lnote{font-size:12px;color:var(--muted);flex:1 1 260px}
+  .maptools{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+  .lbox{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+  .lgrp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .lgrp b{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;margin-right:2px}
+  .lchip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:4px 10px 4px 8px;border-radius:999px;position:relative;
+    background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .lchip i{width:10px;height:10px;border-radius:2px;opacity:.35;flex:0 0 auto}
+  .lchip.on{background:var(--panel2);border-color:#7c8ea3;color:var(--text)}
+  .lchip.on i{opacity:1;box-shadow:0 0 0 1px rgba(255,255,255,.35)}
+  .lchip.dis{opacity:.38;cursor:not-allowed}
+  .lchip[data-n]:not([data-n=""])::after{content:attr(data-n);position:absolute;top:-6px;right:-5px;font-size:9.5px;font-weight:700;
+    background:var(--accent);color:#0b1119;border-radius:999px;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 3px}
+  .lopts{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .lopts label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  #opac{width:120px;padding:0;accent-color:var(--accent)}
+  .lhint{font-size:12px;color:var(--faint)}
   .mapbox{position:relative;height:620px}
   #map{position:absolute;inset:0;background:#0b1119}
-  #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;max-width:290px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;width:300px;max-height:calc(100% - 20px);overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  #legend .lsec{margin-bottom:7px}
+  #legend .lhead{display:flex;justify-content:space-between;width:100%;background:none;border:none;padding:0 0 5px;color:var(--muted);
+    font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  #legend.min{width:auto}
+  #legend.min .lbody{display:none}
+  #legend.min .lhead{padding:0}
+  #legend.min .lhead span{display:inline-block;transform:rotate(-90deg);margin-left:8px}
+  #legend .lsec .lt span{font-weight:400;color:var(--muted);font-size:11px}
+  #legend .lramp{display:flex;gap:2px}
+  #legend .lramp span{flex:1 1 0;min-width:0;text-align:center}
+  #legend .lramp i{display:block;height:10px;border-radius:2px}
+  #legend .lramp em{font-style:normal;font-size:9.5px;color:var(--muted);white-space:nowrap}
   #legend .lt{font-weight:650;margin-bottom:4px}
   #legend .row{display:flex;align-items:center;gap:7px;margin:2px 0}
   #legend .sw{width:16px;height:11px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.18)}
@@ -127,8 +151,8 @@
     #stormHead .lfline{font-size:15px}
     .tiles{grid-template-columns:1fr}
     .mapbox{height:72vh}
-    #layerSel{min-width:0;width:100%}
-    #legend{max-width:200px;font-size:11px}
+    #legend{width:230px;font-size:11px;max-height:45%}
+    .lhint{display:none}
     #tfilter{width:100%;margin-left:0}
     .notables{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
     .chip{flex:0 0 auto}
@@ -162,9 +186,9 @@
   <section class="mapsec">
     <div class="mapcol">
       <div class="maptools">
-        <label for="layerSel">Map</label>
-        <select id="layerSel"></select>
-        <span class="lnote" id="lnote"></span>
+        <div class="lbox" id="layerBox"></div>
+        <div class="lopts"><label for="opac">Opacity</label><input id="opac" type="range" min="15" max="100" value="75">
+          <span class="lhint">Turn on as many layers as you like — each new one is drawn on top. Hover a layer name for its source.</span></div>
       </div>
       <div class="mapbox"><div id="map"></div><div id="legend"></div><div class="loading" id="loading">Loading…</div></div>
     </div>
@@ -195,7 +219,10 @@
       <li><b>Direct deaths (storm total, by cause and state)</b> — Muller et al. (2026), <i>Continental United States direct Atlantic tropical cyclone fatalities: 1963–2024</i>,
         <a href="https://github.com/DrJoMuller/CONUS-TC-Fatalities-1963-2024">dataset</a>. Atlantic storms, lower 48 states.</li>
       <li><b>Normalized damage</b> — Mooney et al. (2026) estimate for each continental U.S. hurricane landfall: the damage the storm would cause with today's housing stock, in 2024 dollars (via Klotzbach et al. 2026).</li>
-      <li><b>Population</b> — U.S. Census Bureau Vintage 2024 county estimates: today's residents, not those at the time of the storm.</li>
+      <li><b>Population</b> — U.S. Census Bureau Vintage 2024 county estimates: today's residents, not those at the time of the storm.
+        <b>Population density</b> divides that by each county's land area.</li>
+      <li><b>Terrain</b> — shaded elevation for the lower 48 from the <a href="https://registry.opendata.aws/terrain-tiles/">AWS Terrain Tiles</a>
+        (USGS 3DEP, SRTM and other public elevation data, compiled by Mapzen).</li>
     </ul>
     <p>Built by Dan Chavas (Purdue) · <a href="../">Track &amp; wind-field explorer</a> · <span id="built"></span></p>
   </section>

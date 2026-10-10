@@ -9,6 +9,7 @@ impacts/data/index.json (the storm list with headline numbers).
     python3 build_impacts.py                 # build everything (downloads are cached)
     python3 build_impacts.py --only helene-2024 ian-2022
     python3 build_impacts.py --skip-rain     # skip the PRISM rainfall step (slowest download)
+    python3 build_impacts.py --terrain       # also rebuild impacts/data/terrain_conus.png
 
 Inputs (all public; cached under .impacts_cache/, which is git-ignored):
   wind      data/basin_NA.json, data/basin_EP.json (IBTrACS, built by process_storms.py):
@@ -789,6 +790,68 @@ def rain_stage(W, C, grid_holder):
 
 
 # ----------------------------------------------------------------------------------------------
+# static background: shaded elevation for the lower 48 (one Web-Mercator PNG overlay)
+# ----------------------------------------------------------------------------------------------
+TERRAIN_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"   # AWS Terrain Tiles
+TERRAIN_Z = 6
+# hypsometric stops (metres -> colour); shading multiplies these
+HYPSO = [(0, (52, 82, 58)), (150, (70, 101, 64)), (300, (95, 112, 66)), (600, (126, 122, 74)),
+         (1000, (143, 119, 86)), (1500, (155, 129, 104)), (2000, (166, 146, 128)), (2500, (186, 173, 161)),
+         (3000, (214, 208, 202)), (4000, (240, 238, 236))]
+
+
+def build_terrain(C, out_dir):
+    from PIL import Image
+    z = TERRAIN_Z; n = 2 ** z
+    def tx(lon): return int((lon + 180) / 360 * n)
+    def ty(lat):
+        r = math.radians(lat); return int((1 - math.log(math.tan(r) + 1 / math.cos(r)) / math.pi) / 2 * n)
+    x0, x1, y0, y1 = tx(-125.5), tx(-66.5), ty(49.6), ty(24.2)
+    W, H = (x1 - x0 + 1) * 256, (y1 - y0 + 1) * 256
+    dem = np.zeros((H, W), np.float32)
+    for X in range(x0, x1 + 1):
+        for Y in range(y0, y1 + 1):
+            p = fetch(TERRAIN_URL.format(z=z, x=X, y=Y), os.path.join(CACHE, "terrain", f"{z}_{X}_{Y}.png"), timeout=60)
+            a = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)
+            dem[(Y - y0) * 256:(Y - y0 + 1) * 256, (X - x0) * 256:(X - x0 + 1) * 256] = a[..., 0] * 256 + a[..., 1] + a[..., 2] / 256 - 32768
+    # pixel centres -> lon/lat (Web Mercator)
+    px = (np.arange(W) + 0.5) / 256 + x0; py = (np.arange(H) + 0.5) / 256 + y0
+    lon = px / n * 360 - 180
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * py / n))))
+    # land = inside a lower-48 county (drops ocean, Canada, Mexico)
+    conus = [i for i, g in enumerate(C.ids) if C.st[g] not in ("AK", "HI", "PR", "VI", "GU", "AS", "MP")]
+    LON, LAT = np.meshgrid(lon, lat)
+    pts = shapely.points(LON.ravel(), LAT.ravel())
+    land = np.zeros(W * H, bool)
+    sub = STRtree([C.geom[i] for i in conus])
+    pi, _ = sub.query(pts, predicate="intersects"); land[pi] = True
+    land = land.reshape(H, W)
+    # hillshade (sun from NW, 45 deg), 2x vertical exaggeration
+    res = 40075016.0 / (256 * n) * np.cos(np.radians(lat))[:, None]
+    gy, gx = np.gradient(dem * 2.0)
+    dzdx = gx / res; dzdy = gy / res
+    slope = np.arctan(np.hypot(dzdx, dzdy)); aspect = np.arctan2(-dzdx, dzdy)
+    az, alt = math.radians(315), math.radians(45)
+    shade = np.sin(alt) * np.cos(slope) + np.cos(alt) * np.sin(slope) * np.cos(az - aspect)
+    shade = np.clip(shade, 0, 1)
+    e = np.clip(dem, 0, None)
+    stops = np.array([s[0] for s in HYPSO], float); cols = np.array([s[1] for s in HYPSO], float)
+    rgb = np.stack([np.interp(e, stops, cols[:, k]) for k in range(3)], -1)
+    rgb *= (0.45 + 0.75 * shade)[..., None]
+    img = np.zeros((H, W, 4), np.uint8)
+    img[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8); img[..., 3] = np.where(land, 235, 0)
+    im = Image.fromarray(img, "RGBA").quantize(colors=128, method=Image.Quantize.FASTOCTREE)
+    os.makedirs(out_dir, exist_ok=True)
+    im.save(os.path.join(out_dir, "terrain_conus.png"), optimize=True)
+    def tile2lat(Y): return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * Y / n))))
+    meta = {"bounds": [[tile2lat(y1 + 1), x0 / n * 360 - 180], [tile2lat(y0), (x1 + 1) / n * 360 - 180]],
+            "stops_m": [s[0] for s in HYPSO], "colors": ["#%02x%02x%02x" % s[1] for s in HYPSO],
+            "source": "AWS Terrain Tiles (Mapzen terrarium; USGS 3DEP/SRTM/ETOPO), zoom %d" % z}
+    json.dump(meta, open(os.path.join(out_dir, "terrain_conus.json"), "w"))
+    log(f"  terrain: {W}x{H} px -> {os.path.getsize(os.path.join(out_dir, 'terrain_conus.png')) / 1e6:.1f} MB")
+
+
+# ----------------------------------------------------------------------------------------------
 # assemble
 # ----------------------------------------------------------------------------------------------
 def r1(x, n=2):
@@ -799,9 +862,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", nargs="*", help="slugs to (re)build, e.g. helene-2024")
     ap.add_argument("--skip-rain", action="store_true")
+    ap.add_argument("--terrain", action="store_true", help="rebuild the static terrain background")
     a = ap.parse_args()
     os.makedirs(os.path.join(OUT, "storms"), exist_ok=True)
     log("counties…"); C = Counties()
+    if a.terrain or not os.path.exists(os.path.join(OUT, "terrain_conus.png")):
+        log("terrain (static background)…"); build_terrain(C, OUT)
     log("storms & wind swaths…")
     storms = []
     for s in load_storms():

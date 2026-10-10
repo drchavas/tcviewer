@@ -99,56 +99,68 @@ const RAMP = {
 };
 function classOf(v, bins){ if(v == null || !(v >= bins[0])) return -1; let k = 0; while(k+1 < bins.length && v >= bins[k+1]) k++; return k; }
 const LAYERS = [
-  {k:'wind', grp:'Hazards', label:'Wind — strongest sustained wind reached',
+  {k:'wind', short:'Wind', ticks:['39+','58+','74+'], unit:'mph sustained', grp:'Hazards', label:'Wind — strongest sustained wind reached',
    get: c => c.w ? (c.w[2] > 0 ? 2 : c.w[1] > 0 ? 1 : c.w[0] > 0 ? 0 : null) : null, cat:true,
    classes:['Tropical-storm-force · 39–57 mph','58–73 mph','Hurricane-force · 74+ mph'], ramp:RAMP.wind,
    note:'Counties any part of which was inside the storm’s wind field, from the best-track wind radii.'},
-  {k:'rain', grp:'Hazards', label:'Rain — storm total (highest in county)', get: c => c.r ? c.r[1] : null,
+  {k:'rain', short:'Rain', ticks:['1','2','4','6','8','10','15','20+'], unit:'in, storm total', grp:'Hazards', label:'Rain — storm total (highest in county)', get: c => c.r ? c.r[1] : null,
    bins:[1,2,4,6,8,10,15,20], labels:['1–2 in','2–4 in','4–6 in','6–8 in','8–10 in','10–15 in','15–20 in','20+ in'], ramp:RAMP.rain,
    note:'PRISM 4-km daily precipitation over the storm’s path (lower 48 states only).', needs:'rain'},
-  {k:'flood', grp:'Hazards', label:'Flooding — high-water marks (deepest above ground)',
+  {k:'flood', short:'Flooding', ticks:['<1','1','3','6','9','12+'], unit:'ft above ground', grp:'Hazards', label:'Flooding — high-water marks (deepest above ground)',
    get: c => c.h ? Math.max(c.h.hc ?? -1, c.h.hr ?? -1) : null,
    bins:[0.01,1,3,6,9,12], labels:['under 1 ft','1–3 ft','3–6 ft','6–9 ft','9–12 ft','12+ ft'], ramp:RAMP.flood,
    note:'USGS-surveyed high-water marks; dots show each mark (coastal surge and river flooding).', needs:'hwm'},
-  {k:'tor', grp:'Hazards', label:'Tornadoes', get: c => c.se && c.se.tor ? c.se.tor : null,
+  {k:'tor', short:'Tornadoes', ticks:['1','2','3','5','10+'], unit:'per county', grp:'Hazards', label:'Tornadoes', get: c => c.se && c.se.tor ? c.se.tor : null,
    bins:[1,2,3,5,10], labels:['1','2','3–4','5–9','10+'], ramp:RAMP.tor,
    note:'Tornadoes in NCEI Storm Events tied to this storm; triangles mark where each touched down.', needs:'tor'},
-  {k:'dead', grp:'Impacts', label:'Deaths — direct + indirect (Storm Events)',
+  {k:'dead', short:'Deaths', ticks:['1','2','5','10','25','50+'], unit:'per county', grp:'Impacts', label:'Deaths — direct + indirect (Storm Events)',
    get: c => c.se ? (c.se.dd + c.se.di) || null : null,
    bins:[0.5,1.5,4.5,9.5,24.5,49.5], labels:['1','2–4','5–9','10–24','25–49','50+'], ramp:RAMP.dead,
    note:'Deaths in NCEI Storm Events reports tied to this storm. Zone reports are split across their counties.', needs:'se'},
-  {k:'inj', grp:'Impacts', label:'Injuries (Storm Events)', get: c => c.se ? (c.se.id + c.se.ii) || null : null,
+  {k:'inj', short:'Injuries', ticks:['1','2','5','10','25','50+'], unit:'per county', grp:'Impacts', label:'Injuries (Storm Events)', get: c => c.se ? (c.se.id + c.se.ii) || null : null,
    bins:[0.5,1.5,4.5,9.5,24.5,49.5], labels:['1','2–4','5–9','10–24','25–49','50+'], ramp:RAMP.dead,
    note:'Injuries in NCEI Storm Events reports tied to this storm.', needs:'se'},
-  {k:'dmg', grp:'Impacts', label:'Damage — reported property + crop (Storm Events)',
+  {k:'dmg', short:'Damage', ticks:['10K','100K','1M','10M','100M','1B+'], unit:'$ reported', grp:'Impacts', label:'Damage — reported property + crop (Storm Events)',
    get: c => c.se ? (c.se.pd + c.se.cd) || null : null,
    bins:[1e4,1e5,1e6,1e7,1e8,1e9], labels:['$10K+','$100K+','$1M+','$10M+','$100M+','$1B+'], ramp:RAMP.dmg,
    note:'Damage as reported to NCEI at the time (not inflation-adjusted; often incomplete).', needs:'se'},
-  {k:'pop', grp:'Exposure', label:'Population of counties in the wind field',
+  {k:'pop', short:'Population', ticks:['10K','30K','100K','300K','1M','3M+'], unit:'people', grp:'Exposure', label:'Population of counties in the wind field',
    get: c => c.w && c.w[0] > 0 ? POPOF(c) : null,
    bins:[1e4,3e4,1e5,3e5,1e6,3e6], labels:['10K+','30K+','100K+','300K+','1M+','3M+'], ramp:RAMP.pop,
    note:'Census 2024 estimates (today’s population) for counties reached by 39+ mph winds.'},
+  {k:'dens', short:'Population density', grp:'Background', bg:true, label:'Population density (people per square mile, by county)',
+   get: (c, g) => { const p = POP[g], a = CF[g] && CF[g].properties.AREA; return p != null && a ? p / (a / 2.58999) : null; },
+   bins:[10,25,50,100,250,500,1000,2500], ticks:['10','25','50','100','250','500','1K','2.5K+'], unit:'people / sq mi',
+   ramp:['#2c3138','#3b4149','#4d545e','#626a75','#7b838e','#98a0aa','#bac0c8','#e3e6ea'],
+   note:'Every U.S. county: Census 2024 population ÷ land area.'},
+  {k:'terrain', short:'Terrain', grp:'Background', bg:true, label:'Terrain (elevation, lower 48)',
+   note:'Shaded elevation from the AWS Terrain Tiles (USGS 3DEP / SRTM).'},
 ];
 let POPOF = () => null;
 const LBYK = Object.fromEntries(LAYERS.map(l => [l.k, l]));
+const GCOL = {Hazards:COL.haz, Impacts:COL.imp, Exposure:COL.exp, Background:'#c3c9d1'};
 
 // ---------------------------------------------------------------- map
 const map = L.map('map', {worldCopyJump:false}).setView([32,-85], 5);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
   {attribution:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', maxZoom:16}).addTo(map);
 const pane = (n, z, pe) => { map.createPane(n); map.getPane(n).style.zIndex = z; if(!pe) map.getPane(n).style.pointerEvents = 'none'; };
-pane('pfill', 300, true); pane('pmesh', 320); pane('pswath', 330); pane('ptrack', 420); pane('ppts', 440, true);
+pane('pbg', 250); pane('pfill', 300, true); pane('psel', 325); pane('pmesh', 320); pane('pswath', 330); pane('ptrack', 420); pane('ppts', 440, true);
 const fillR = L.canvas({pane:'pfill', padding:0.3});
 const meshR = L.canvas({pane:'pmesh', padding:0.3});
 L.geoJSON(topojson.mesh(ctopo, cObj), {pane:'pmesh', renderer:meshR, interactive:false,
   style:{color:'#d6e0ea', weight:0.4, opacity:0.22}}).addTo(map);
 L.geoJSON(topojson.mesh(stopo, stopo.objects[Object.keys(stopo.objects)[0]]), {pane:'pmesh', renderer:meshR, interactive:false,
   style:{color:'#d6e0ea', weight:1.1, opacity:0.6}}).addTo(map);
-let fillLayer = null, ptsLayer = null, overLayer = L.layerGroup().addTo(map);
+let densLayer = null, fills = [], selLayer = null, ptsLayer = null, overLayer = L.layerGroup().addTo(map), terrainLayer = null;
+const TERRAIN = fetch('data/terrain_conus.json').then(r => r.ok ? r.json() : null).catch(() => null);
 
 // ---------------------------------------------------------------- state
-let S = null, cur = null, layerK = 'wind', selC = null, sortK = null, sortDir = -1;
+let S = null, cur = null, selC = null, sortK = null, sortDir = -1;
 const params = new URLSearchParams(location.search);
+let active = (params.get('layers') || params.get('layer') || 'wind').split(',').filter(k => LBYK[k] && !LBYK[k].bg);
+const bgOn = new Set((params.get('bg') || '').split(',').filter(k => LBYK[k] && LBYK[k].bg));
+let opac = Math.min(1, Math.max(0.15, (+params.get('op') || 75) / 100));
 
 // ---------------------------------------------------------------- picker
 const sel = $('#stormSel'), q = $('#q');
@@ -179,14 +191,37 @@ const sel = $('#stormSel'), q = $('#q');
     b.textContent = `${titleCase(BYSLUG[k].name)} ${BYSLUG[k].year}`; b.onclick = () => loadStorm(k); nb.appendChild(b);
   }
 }
-const ls = $('#layerSel');
 {
-  let og = null, g = null;
+  const box = $('#layerBox'); let grp = null, gdiv = null;
   for(const l of LAYERS){
-    if(l.grp !== g){ og = document.createElement('optgroup'); og.label = l.grp; ls.appendChild(og); g = l.grp; }
-    const o = document.createElement('option'); o.value = l.k; o.textContent = l.label; og.appendChild(o);
+    if(l.grp !== grp){ gdiv = document.createElement('div'); gdiv.className = 'lgrp';
+      gdiv.innerHTML = `<b style="color:${GCOL[l.grp]}">${l.grp}</b>`; box.appendChild(gdiv); grp = l.grp; }
+    const sw = l.ramp ? l.ramp[l.ramp.length - 1] : 'linear-gradient(90deg,#466540,#a69280,#f0eeec)';
+    const b = document.createElement('button'); b.className = 'lchip'; b.dataset.k = l.k; b.title = l.note || '';
+    b.innerHTML = `<i style="background:${sw}"></i>${l.short}`;
+    b.onclick = () => toggleLayer(l.k); gdiv.appendChild(b);
   }
-  ls.addEventListener('change', () => { layerK = ls.value; drawLayer(); renderTable(); syncURL(); });
+  const op = $('#opac'); op.value = Math.round(opac * 100);
+  op.addEventListener('input', () => { opac = op.value / 100; for(const f of fills) f.setStyle({fillOpacity:opac}); syncURL(); });
+}
+function toggleLayer(k){
+  const l = LBYK[k];
+  if(l.bg){ bgOn.has(k) ? bgOn.delete(k) : bgOn.add(k); }
+  else {
+    if(layerUnavailable(l)) return;
+    if(active.includes(k)) active = active.filter(x => x !== k); else { active.push(k); sortK = null; }
+  }
+  syncChips(); drawLayers(); renderTable(); syncURL();
+}
+function syncChips(){
+  document.querySelectorAll('.lchip').forEach(b => {
+    const l = LBYK[b.dataset.k], u = layerUnavailable(l);
+    const on = l.bg ? bgOn.has(l.k) : active.includes(l.k);
+    b.classList.toggle('on', on); b.classList.toggle('dis', !!u);
+    b.title = u ? `${l.short}: ${u} for this storm` : (l.note || '');
+    const n = active.indexOf(l.k);
+    b.dataset.n = (!l.bg && active.length > 1 && n >= 0) ? n + 1 : '';
+  });
 }
 
 // ---------------------------------------------------------------- load a storm
@@ -200,14 +235,9 @@ async function loadStorm(slug){
   for(const [g, c] of Object.entries(S.counties)) c._g = g;
   sel.value = slug;
   document.querySelectorAll('.chip').forEach(b => b.classList.toggle('on', b.dataset.slug === slug));
-  if(layerUnavailable(LBYK[layerK])) layerK = 'wind';
-  if(params.get('layer') && LBYK[params.get('layer')] && !layerUnavailable(LBYK[params.get('layer')]) && !loadStorm.done) layerK = params.get('layer');
-  ls.value = layerK;
-  for(const o of ls.querySelectorAll('option')){
-    const u = layerUnavailable(LBYK[o.value]); o.disabled = !!u;
-    o.textContent = LBYK[o.value].label + (u ? ` (${u})` : '');
-  }
-  renderHead(); renderTiles(); drawOverlays(); drawLayer(); fitStorm();
+  active = active.filter(k => !layerUnavailable(LBYK[k]));
+  syncChips();
+  renderHead(); renderTiles(); drawOverlays(); drawLayers(); fitStorm();
   const pc = !loadStorm.done && params.get('county');
   if(pc && S.counties[pc]) selectCounty(pc, true); else renderSummary();
   renderTable(); loadStorm.done = true; syncURL();
@@ -215,7 +245,7 @@ async function loadStorm(slug){
   document.title = `${stormTitle(cur)} (${cur.year}) — hazards & impacts by county | tcviewer.org`;
 }
 function layerUnavailable(l){
-  if(!S || !l.needs) return null;
+  if(!S || !l || !l.needs) return null;
   if(l.needs === 'rain' && !S.rain) return 'no data';
   if(l.needs === 'hwm' && !(S.hwm && S.hwm.length)) return 'not surveyed';
   if(l.needs === 'tor' && !(S.se && S.se.tor)) return 'none reported';
@@ -225,7 +255,9 @@ function layerUnavailable(l){
 function syncURL(){
   if(!cur) return;
   const p = new URLSearchParams({storm:cur.slug});
-  if(layerK !== 'wind') p.set('layer', layerK);
+  if(active.join(',') !== 'wind') p.set('layers', active.join(',') || 'none');
+  if(bgOn.size) p.set('bg', [...bgOn].join(','));
+  if(Math.round(opac * 100) !== 75) p.set('op', Math.round(opac * 100));
   if(selC) p.set('county', selC);
   history.replaceState(null, '', '?' + p.toString());
 }
@@ -353,31 +385,48 @@ function fitStorm(){
 }
 
 // ---------------------------------------------------------------- choropleth
-function valOf(c, l){ return l.get(c); }
+function valOf(c, l, g){ return l.get(c || {}, g); }
 function colorOf(v, l){
   if(l.cat) return v == null ? null : l.ramp[v];
   const k = classOf(v, l.bins); return k < 0 ? null : l.ramp[k];
 }
-function drawLayer(){
-  const l = LBYK[layerK];
-  if(fillLayer){ map.removeLayer(fillLayer); fillLayer = null; }
-  if(ptsLayer){ map.removeLayer(ptsLayer); ptsLayer = null; }
-  const fs = [];
-  for(const [g, c] of Object.entries(S.counties)){
-    const v = valOf(c, l), col = colorOf(v, l);
-    if(col && CF[g]) fs.push({type:'Feature', properties:{g, col}, geometry:CF[g].geometry});
+async function drawBg(){
+  const want = bgOn.has('terrain');
+  if(want && !terrainLayer){
+    const T = await TERRAIN; if(!T) return;
+    terrainLayer = L.imageOverlay('data/terrain_conus.png', T.bounds, {pane:'pbg', opacity:0.9, interactive:false});
   }
-  fillLayer = L.geoJSON({type:'FeatureCollection', features:fs}, {pane:'pfill', renderer:fillR,
-    style: f => ({stroke:f.properties.g === selC, color:'#ffe14d', weight:2.5, opacity:1,
-                  fill:true, fillColor:f.properties.col, fillOpacity:0.78}),
-    onEachFeature: (f, lyr) => {
-      lyr.bindTooltip(() => tipHtml(f.properties.g), {sticky:true, className:'tt'});
-      lyr.on('click', () => selectCounty(f.properties.g));
-    }}).addTo(map);
+  if(terrainLayer){ if(bgOn.has('terrain')) terrainLayer.addTo(map); else map.removeLayer(terrainLayer); }
+}
+function drawLayers(){
+  for(const f of fills) map.removeLayer(f);
+  fills = [];
+  if(selLayer){ map.removeLayer(selLayer); selLayer = null; }
+  if(ptsLayer){ map.removeLayer(ptsLayer); ptsLayer = null; }
+  drawBg();
+  const order = [...(bgOn.has('dens') ? ['dens'] : []), ...active];      // density underneath, then in the order turned on
+  for(const k of order){
+    if(k === 'dens' && densLayer){ densLayer.setStyle({fillOpacity:opac}); fills.push(densLayer.addTo(map)); continue; }   // built once
+    const l = LBYK[k], fs = [];
+    const src = k === 'dens' ? Object.keys(CF) : Object.keys(S.counties);
+    for(const g of src){
+      const col = colorOf(valOf(S.counties[g], l, g), l);
+      if(col && CF[g]) fs.push({type:'Feature', properties:{g, col}, geometry:CF[g].geometry});
+    }
+    const lyr = L.geoJSON({type:'FeatureCollection', features:fs}, {pane:'pfill', renderer:fillR,
+      style: f => ({stroke:false, fill:true, fillColor:f.properties.col, fillOpacity:opac}),
+      onEachFeature: (f, lyr) => {
+        lyr.bindTooltip(() => tipHtml(f.properties.g), {sticky:true, className:'tt'});
+        lyr.on('click', () => selectCounty(f.properties.g));
+      }}).addTo(map);
+    if(k === 'dens') densLayer = lyr;
+    fills.push(lyr);
+  }
+  if(selC && CF[selC]) selLayer = L.geoJSON(CF[selC], {pane:'psel', interactive:false,
+    style:{color:'#ffe14d', weight:2.6, opacity:1, fill:false}}).addTo(map);
   ptsLayer = L.layerGroup().addTo(map);
-  if(l.k === 'flood') drawHWM();
-  if(l.k === 'tor') drawTor();
-  $('#lnote').textContent = l.note;
+  if(active.includes('flood')) drawHWM();
+  if(active.includes('tor')) drawTor();
   renderLegend();
 }
 function drawHWM(){
@@ -411,15 +460,28 @@ function drawTor(){
       .bindTooltip(`<b>Tornado</b> · ${ef >= 0 ? 'EF' + ef : 'rating unknown'}`, {className:'tt'}).addTo(ptsLayer);
   }
 }
-function renderLegend(){
-  const l = LBYK[layerK];
-  const rows = (l.cat ? l.classes : l.labels).map((lab, i) => `<div class="row"><span class="sw" style="background:${l.ramp[i]}"></span>${lab}</div>`);
-  if(!l.cat) rows.reverse();
+function legendSection(l){
   let extra = '';
-  if(l.k === 'flood') extra = '<div class="extra">Dots: individual marks (grey = no depth measured). ★ peak surge.</div>';
+  if(l.k === 'flood') extra = '<div class="extra">Dots: each high-water mark (grey = no depth). ★ peak surge.</div>';
   if(l.k === 'tor') extra = '<div class="extra">▲ touchdown, shaded by EF rating</div>';
-  extra += '<div class="extra">White line: track · dashed: 39+ mph wind area · solid: 74+ mph</div>';
-  $('#legend').innerHTML = `<div class="lt">${esc(l.label.split(' — ')[0])}</div>${rows.join('')}${extra}`;
+  return `<div class="lsec"><div class="lt">${esc(l.short)} <span>${esc(l.unit || '')}</span></div><div class="lramp">`
+    + l.ramp.map((c, i) => `<span><i style="background:${c}"></i><em>${l.ramp.length > 8 && i % 2 ? '&nbsp;' : l.ticks[i]}</em></span>`).join('') + `</div>${extra}</div>`;
+}
+async function renderLegend(){
+  const secs = [...active].reverse().map(k => legendSection(LBYK[k]));
+  if(bgOn.has('dens')) secs.push(legendSection(LBYK.dens));
+  if(bgOn.has('terrain')){
+    const T = await TERRAIN;
+    if(T){
+      const ft = m => { const f = m * 3.28084; return f >= 1000 ? (f / 1000).toFixed(f >= 9500 ? 0 : 1).replace('.0', '') + 'K' : String(Math.round(f / 100) * 100); };
+      secs.push(legendSection({short:'Terrain', unit:'elevation, ft', ramp:T.colors, ticks:T.stops_m.map(ft)}));
+    }
+  }
+  if(!secs.length) secs.push('<div class="lsec"><div class="lt">No layers on</div></div>');
+  const lg = $('#legend');
+  lg.innerHTML = '<button class="lhead" type="button">Legend <span>▾</span></button><div class="lbody">' + secs.join('')
+    + '<div class="extra">White line: track · dashed: 39+ mph wind area · solid: 74+ mph</div></div>';
+  lg.querySelector('.lhead').onclick = () => lg.classList.toggle('min');
 }
 
 // ---------------------------------------------------------------- county tooltip & card
@@ -429,18 +491,25 @@ const windTxt = w => !w ? 'outside the wind field' : w[2] > 0 ? `hurricane-force
   : w[1] > 0 ? `58+ mph over ${pct(w[1])}` : w[0] > 0 ? `tropical-storm-force (39+ mph) over ${pct(w[0])}` : 'outside the wind field';
 const pct = f => f >= 0.995 ? 'all' : f < 0.01 ? '<1%' : Math.round(f * 100) + '%';
 const deaths = x => { const r = Math.round(x); return (Math.abs(x - r) > 0.01 ? '≈' : '') + r; };
+function layerLine(k, c, g){
+  const l = LBYK[k];
+  if(k === 'wind') return c.w ? `Wind: ${windTxt(c.w)}` : '';
+  if(k === 'rain') return c.r ? `Rain: ${c.r[1].toFixed(1)} in (county average ${c.r[0].toFixed(1)} in)` : '';
+  if(k === 'flood') return c.h ? `Flooding: ${fl(c.h)}` : '';
+  if(k === 'tor') return c.se && c.se.tor ? `${plural(c.se.tor, 'tornado', 'tornadoes')}${c.se.ef >= 0 ? ', strongest EF' + c.se.ef : ''}` : '';
+  if(k === 'dead') return c.se && (c.se.dd + c.se.di) ? `Deaths: ${deaths(c.se.dd)} direct, ${deaths(c.se.di)} indirect` : '';
+  if(k === 'inj') return c.se && (c.se.id + c.se.ii) ? `Injuries: ${deaths(c.se.id + c.se.ii)}` : '';
+  if(k === 'dmg') return c.se && (c.se.pd + c.se.cd) ? `Damage: ${money(c.se.pd + c.se.cd)} reported` : '';
+  if(k === 'pop') return c.w && POP[g] != null ? `Population: ${people(POP[g])} (2024)` : '';
+  if(k === 'dens'){ const v = valOf(c, l, g); return v != null ? `Density: ${n0(v)} people per sq mi` : ''; }
+  return '';
+}
 function tipHtml(g){
-  const c = S.counties[g], l = LBYK[layerK], v = valOf(c, l);
-  let main = '';
-  if(l.k === 'wind') main = windTxt(c.w);
-  else if(l.k === 'rain') main = c.r ? `${c.r[1].toFixed(1)} in (county average ${c.r[0].toFixed(1)} in)` : '';
-  else if(l.k === 'flood') main = c.h ? fl(c.h) : '';
-  else if(l.k === 'tor') main = c.se ? `${plural(c.se.tor, 'tornado', 'tornadoes')}${c.se.ef >= 0 ? ', strongest EF' + c.se.ef : ''}` : '';
-  else if(l.k === 'dead') main = c.se ? `${deaths(c.se.dd)} direct, ${deaths(c.se.di)} indirect deaths` : '';
-  else if(l.k === 'inj') main = c.se ? `${deaths(c.se.id + c.se.ii)} injuries` : '';
-  else if(l.k === 'dmg') main = c.se ? `${money(c.se.pd + c.se.cd)} reported damage` : '';
-  else if(l.k === 'pop') main = `${people(v)} people (2024)`;
-  return `<b>${esc(cname(g))}</b><br>${main}<br><span style="color:var(--muted)">click for everything in this county</span>`;
+  const c = S.counties[g] || {};
+  const keys = [...active].reverse(); if(bgOn.has('dens')) keys.push('dens');
+  const lines = keys.map(k => layerLine(k, c, g)).filter(Boolean);
+  if(!S.counties[g]) lines.unshift('<span style="color:var(--muted)">outside this storm’s footprint</span>');
+  return `<b>${esc(cname(g))}</b><br>${lines.join('<br>')}<br><span style="color:var(--muted)">click for everything in this county</span>`;
 }
 function fl(h){
   const a = [];
@@ -448,7 +517,7 @@ function fl(h){
   return a.length ? `deepest water above ground: ${a.join(', ')}` : (h.ec != null || h.er != null ? 'marks surveyed (no depth above ground)' : '');
 }
 function selectCounty(g, noZoom){
-  selC = g; drawLayer();
+  selC = g; drawLayers();
   renderCard(g);
   document.querySelectorAll('#ctab tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.g === g));
   if(!noZoom && window.innerWidth <= 1050) $('#card').scrollIntoView({behavior:'smooth', block:'start'});
@@ -456,10 +525,11 @@ function selectCounty(g, noZoom){
 }
 function row(k, v){ return `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`; }
 function renderCard(g){
-  const c = S.counties[g], pop = POP[g];
+  const c = S.counties[g] || {}, pop = POP[g];
   const h = [];
   h.push(`<button class="back" id="backBtn">← Storm overview</button>`);
-  h.push(`<h3>${esc(cname(g))}</h3><div class="csub">${pop ? people(pop) + ' people (2024)' : ''}</div>`);
+  const dens = valOf(c, LBYK.dens, g);
+  h.push(`<h3>${esc(cname(g))}</h3><div class="csub">${pop ? people(pop) + ' people (2024)' : ''}${dens != null ? ' · ' + n0(dens) + ' per sq mi' : ''}</div>`);
   // hazards
   h.push(`<h4><i style="background:${COL.haz}"></i>Hazards</h4><table>`);
   if(c.w) h.push(row('Strongest wind', c.w[2] > 0 ? 'Hurricane-force (74+ mph)' : c.w[1] > 0 ? '58–73 mph' : c.w[0] > 0 ? 'Tropical-storm-force (39–57 mph)' : '—'),
@@ -487,7 +557,7 @@ function renderCard(g){
       h.push('<div class="note">≈: part of a report filed for a forecast zone covering several counties, split evenly between them.</div>');
   } else h.push('<div class="note">No Storm Events reports tied to this storm in this county.</div>');
   $('#card').innerHTML = h.join('');
-  $('#backBtn').onclick = () => { selC = null; drawLayer(); renderSummary(); renderTable(); syncURL(); };
+  $('#backBtn').onclick = () => { selC = null; drawLayers(); renderSummary(); renderTable(); syncURL(); };
 }
 function renderSummary(){
   const h = [];
@@ -556,7 +626,7 @@ const L2C = {wind:'wind', rain:'rain', flood:'flood', tor:'tor', dead:'dead', in
 $('#tfilter').addEventListener('input', renderTable);
 function renderTable(){
   if(!S) return;
-  const sk = sortK || L2C[layerK] || 'wind';
+  const sk = sortK || L2C[active[active.length - 1]] || 'wind';
   const col = COLS.find(c => c.k === sk);
   const filt = $('#tfilter').value.trim().toLowerCase();
   let rows = Object.entries(S.counties).filter(([g]) => CF[g])
