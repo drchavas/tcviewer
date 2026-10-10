@@ -37,6 +37,7 @@ the three history modes to explain the ringed positions.
 - `landfall.js` — county wind-exposure add-on (preview; see below).
 - `geo/states.topo.json.gz`, `geo/counties.topo.json.gz` — U.S. border TopoJSON (Census cartographic
   boundaries), copied from extremewx.org's `scs/trends/geo/`; gzipped on disk, decompressed in the browser.
+- `impacts/`, `build_impacts.py` — the Storm Hazards & Impacts page and its data builder (see below).
 - `CNAME` — custom domain for GitHub Pages.
 
 ## Update the data
@@ -119,6 +120,35 @@ outlines, the summary (counties, states, population, area-weighted population) a
 - `geo/county_pop.json` — Census Vintage 2024 county estimates (PR municipios from prm-est2024; CT's 8
   former counties, which the county file uses, from Vintage 2020 scaled to CT's 2024 total).
 - Next: tcwindprofile-based peak wind & duration per county (precomputed), Storm Events impacts.
+
+## Storm Hazards & Impacts page (`impacts/`, preview)
+A separate, public-facing page (tcviewer.org/impacts/) for people who care about **impacts** rather than
+meteorology: pick a storm, see what it did to each U.S. county. Plain units (mph, inches, feet, local
+time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
+- **Files**: `impacts/index.html` (markup + CSS), `impacts/app.js` (all logic), `impacts/data/index.json`
+  (storm list + headline numbers), `impacts/data/storms/<slug>.json` (one per storm, 30–300 KB),
+  `impacts/sources/` (Klotzbach et al. 2026 supplementary landfall table, CC BY 4.0). Shares
+  `geo/counties.topo.json.gz`, `geo/states.topo.json.gz`, `geo/county_pop.json` with the main page.
+- **Storms**: every Atlantic / East-Pacific storm since 2004 whose 34-kt wind radii touched a U.S. county
+  (133 as of Oct 2026). 2004 is when wind radii became routine.
+- **Layout**: header with landfall sentence(s) in local time → Hazards / Impacts / Exposure headline tiles →
+  map with a Layer menu (Hazards: wind, rain, flooding, tornadoes · Impacts: deaths, injuries, damage ·
+  Exposure: population) + storm-overview / county card (click a county) → sortable county table → sources.
+- **Main page link**: `../?sid=<IBTrACS SID>` opens that storm in the track explorer (added to index.html).
+
+### Rebuilding the data: `python3 build_impacts.py`
+Needs `shapely` (≥2), `numpy`, `pandas`, `openpyxl`, `tifffile` (`pip install shapely tifffile openpyxl`).
+Downloads are cached in `.impacts_cache/` (git-ignored; ~1.3 GB, mostly PRISM). First run ~10 min, then ~3 min.
+`--only helene-2024 …` rebuilds selected storms; `--skip-rain` skips PRISM. Not part of the daily Action yet.
+| Layer | Source | How it's tied to the storm |
+|---|---|---|
+| Wind | IBTrACS radii in `data/basin_{NA,EP}.json` | port of the viewer's `footprint()`/`swathPolys()` in shapely; county = any part inside (fractions stored) |
+| Rain | PRISM daily 4-km ppt (services.nacse.org) | each PRISM day (24 h ending 12 UTC) counts only cells within 500 km of the centre from 6 h before to 30 h after that day (captures rain ahead of the storm, excludes unrelated systems). Lower 48 only |
+| Flooding | USGS STN high-water marks (`FilteredHWMs.json?Event=`) | STN hurricane events matched by "YYYY Name"; per county max height above ground (coastal/riverine) and max water elevation (NAVD88 only); marks >40 ft above ground dropped as entry errors |
+| Deaths, injuries, damage, tornadoes | NCEI Storm Events details files | (a) tropical-storm/hurricane/TD/storm-surge reports within 24 h of the U.S. period and 400 km of the track, or (b) any report whose narrative names the storm in a tropical context, within −48 h/+120 h and 1200 km. One storm per report (name match wins, then distance). Zone reports → counties via NWS zone–county correlation (`bp16ap26.dbx`, name fallback), split evenly. Puerto Rico's pre-2023 zones don't map, so PR reports count in totals but not on the map |
+| Direct deaths by cause/state | Muller et al. (2026) GitHub dataset | by ATCF id; lower 48, Atlantic only |
+| Normalized damage, peak surge | Klotzbach et al. (2026) supp. table (Mooney et al. 2026 damage) | by ATCF id; CONUS hurricane landfalls |
+| Population | `geo/county_pop.json` (Census V2024) | counties in the 34-kt area |
 
 ## Basemap
 Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CARTO's key-free dark

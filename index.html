@@ -1209,6 +1209,10 @@ window.__initViewer = function(){
     if(DATA.storms[i].name.toLowerCase()==='helene' && DATA.storms[i].year===2024){
       defBasin=DATA.storms[i].basin||'ALL'; defYear=2024; defIdx=i; break; }
   }
+  // ?sid=<IBTrACS SID> opens that storm instead (used by the Hazards & Impacts page's links)
+  { const qsid = new URLSearchParams(location.search).get('sid');
+    const qi = qsid ? DATA.storms.findIndex(s=>s.sid===qsid) : -1;
+    if(qi>=0){ defBasin=DATA.storms[qi].basin||'ALL'; defYear=DATA.storms[qi].year; defIdx=qi; } }
   basinSel.value = presentBasins.includes(defBasin) ? defBasin : 'ALL';
   populateYears(basinSel.value, defYear);
   // render the default storm (loads its basin file), then auto-select the landfall point

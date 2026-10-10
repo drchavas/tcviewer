@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storm Hazards &amp; Impacts — U.S. hurricane and tropical storm impacts by county | tcviewer.org</title>
+<meta name="description" content="What did a hurricane or tropical storm do to the U.S.? County-by-county wind, rainfall, flooding, tornadoes, deaths, injuries and damage for every storm since 2004 that brought tropical-storm-force winds to a U.S. county.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://tcviewer.org/impacts/">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --faint:#6f8294; --accent:#46a3ff; --accent2:#ffb14e;
+    --haz:#5cc9d6; --imp:#ff8a7a; --exp:#a9abe6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.45}
+  a{color:var(--accent)}
+  .wrap{max-width:1360px;margin:0 auto;padding:0 18px}
+  header.top{background:var(--panel);border-bottom:1px solid var(--line)}
+  header.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-top:12px;padding-bottom:12px}
+  .brand{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .brand a.home{color:var(--muted);text-decoration:none;font-size:13px}
+  .brand a.home:hover{color:var(--text)}
+  .brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.005em}
+  .beta{font-size:10.5px;font-weight:700;letter-spacing:.02em;color:#0b1119;white-space:nowrap;background:var(--accent2);border-radius:3px;padding:1px 5px;vertical-align:2px}
+  .picker{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input,select,button{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  select{cursor:pointer}
+  #q{width:230px}
+  button{cursor:pointer}
+  button:hover,select:hover{border-color:#3d526a}
+  .notables{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 0}
+  .notables span{font-size:12px;color:var(--muted);margin-right:2px;align-self:center}
+  .chip{font-size:12.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text)}
+  .chip.on{background:var(--panel2);border-color:var(--accent)}
+
+  #stormHead{padding:18px 0 4px}
+  #stormHead h2{margin:0;font-size:30px;line-height:1.15;font-weight:750}
+  #stormHead .sub{color:var(--muted);margin-top:4px;font-size:14.5px}
+  #stormHead .lfline{margin:10px 0 0;font-size:16px;max-width:980px}
+  #stormHead .links{margin-top:8px;font-size:13.5px;display:flex;gap:16px;flex-wrap:wrap}
+
+  .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0 4px}
+  .tgroup{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px 14px}
+  .tgroup h3{margin:0 0 8px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:7px}
+  .tgroup h3 i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .tgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+  .tile .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+  .tile .v small{font-size:14px;font-weight:600;color:var(--muted)}
+  .tile .l{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .tile .s{font-size:11.5px;color:var(--faint);margin-top:1px}
+  .tile.na .v{color:var(--faint);font-size:16px;font-weight:600}
+
+  .mapsec{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;margin-top:12px}
+  .mapcol{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .maptools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .maptools label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  #layerSel{min-width:280px}
+  .maptools .lnote{font-size:12px;color:var(--muted);flex:1 1 260px}
+  .mapbox{position:relative;height:620px}
+  #map{position:absolute;inset:0;background:#0b1119}
+  #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;max-width:290px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  #legend .lt{font-weight:650;margin-bottom:4px}
+  #legend .row{display:flex;align-items:center;gap:7px;margin:2px 0}
+  #legend .sw{width:16px;height:11px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.18)}
+  #legend .extra{color:var(--muted);margin-top:5px;font-size:11.5px}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:600;background:rgba(15,23,32,.55);font-size:14px;color:var(--muted)}
+
+  aside#card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-height:681px;overflow-y:auto}
+  #card h3{margin:0;font-size:19px}
+  #card .csub{color:var(--muted);font-size:13px;margin-top:2px}
+  #card h4{margin:16px 0 6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
+  #card h4 i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  #card table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+  #card td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(42,58,77,.6)}
+  #card td.k{color:var(--muted);padding-right:10px}
+  #card td.v{text-align:right;font-weight:600}
+  #card .note{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.45}
+  #card .back{font-size:13px;margin-bottom:8px;background:none;border:none;color:var(--accent);padding:0}
+  #card .toplist button{background:none;border:none;color:var(--text);padding:2px 0;font-size:13.5px;text-align:left;width:100%;display:flex;justify-content:space-between;gap:10px;border-top:1px solid rgba(42,58,77,.6);border-radius:0}
+  #card .toplist button:hover{color:var(--accent)}
+  #card .toplist button b{font-variant-numeric:tabular-nums}
+  .bar{height:7px;border-radius:3px;background:var(--panel2);overflow:hidden;margin-top:3px}
+  .bar i{display:block;height:100%}
+
+  #tableSec{margin:16px 0 8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  #tableSec .thead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  #tableSec h3{margin:0;font-size:16px}
+  #tableSec .tcount{color:var(--muted);font-size:13px}
+  #tfilter{margin-left:auto;width:220px}
+  .tscroll{overflow:auto;max-height:520px}
+  table.ct{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  table.ct th{position:sticky;top:0;background:var(--panel);text-align:right;font-weight:650;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none}
+  table.ct th.grp{cursor:default;text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:none;padding-bottom:0}
+  table.ct th:first-child,table.ct td:first-child{text-align:left}
+  table.ct th.sorted{color:var(--text)}
+  table.ct td{padding:5px 8px;text-align:right;border-bottom:1px solid rgba(42,58,77,.55);white-space:nowrap}
+  table.ct tr:hover td{background:rgba(255,255,255,.035);cursor:pointer}
+  table.ct tr.sel td{background:rgba(70,163,255,.12)}
+  table.ct td.z{color:var(--faint)}
+
+  #sources{margin:16px 0 40px;color:var(--muted);font-size:13px;line-height:1.6}
+  #sources h3{color:var(--text);font-size:15px;margin:0 0 6px}
+  #sources li{margin:3px 0}
+  .leaflet-tooltip.tt{background:rgba(15,23,32,.96);color:var(--text);border:1px solid var(--line);border-radius:8px;font-size:12.5px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .leaflet-tooltip.tt::before{display:none}
+  .leaflet-container{font:inherit}
+  .lflabel{color:#fff;font-size:11.5px;font-weight:650;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap}
+
+  @media (max-width:1050px){
+    .tiles{grid-template-columns:1fr 1fr}
+    .mapsec{grid-template-columns:1fr}
+    aside#card{max-height:none}
+  }
+  @media (max-width:640px){
+    body{font-size:14px}
+    .wrap{padding:0 12px}
+    .picker{margin-left:0;width:100%}
+    #q{flex:1 1 160px;width:auto}
+    #stormSel{flex:1 1 160px;min-width:0}
+    #stormHead h2{font-size:24px}
+    #stormHead .lfline{font-size:15px}
+    .tiles{grid-template-columns:1fr}
+    .mapbox{height:72vh}
+    #layerSel{min-width:0;width:100%}
+    #legend{max-width:200px;font-size:11px}
+    #tfilter{width:100%;margin-left:0}
+    .notables{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+    .chip{flex:0 0 auto}
+    #legend .extra{display:none}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <a class="home" href="../">tcviewer.org</a><span style="color:var(--faint)">›</span>
+      <h1>Storm Hazards &amp; Impacts</h1><span class="beta">EXPERIMENTAL — beta version, in testing</span>
+    </div>
+    <div class="picker">
+      <input id="q" type="search" list="qlist" placeholder="Find a storm, e.g. Helene 2024" autocomplete="off">
+      <datalist id="qlist"></datalist>
+      <select id="stormSel" aria-label="Storm"></select>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <div class="notables" id="notables"></div>
+  <section id="stormHead">
+    <h2 id="title">Loading…</h2>
+    <div class="sub" id="sub"></div>
+    <p class="lfline" id="lfline"></p>
+    <div class="links" id="links"></div>
+  </section>
+  <section class="tiles" id="tiles"></section>
+  <section class="mapsec">
+    <div class="mapcol">
+      <div class="maptools">
+        <label for="layerSel">Map</label>
+        <select id="layerSel"></select>
+        <span class="lnote" id="lnote"></span>
+      </div>
+      <div class="mapbox"><div id="map"></div><div id="legend"></div><div class="loading" id="loading">Loading…</div></div>
+    </div>
+    <aside id="card"></aside>
+  </section>
+  <section id="tableSec">
+    <div class="thead"><h3>Counties</h3><span class="tcount" id="tcount"></span>
+      <input id="tfilter" type="search" placeholder="Filter by county or state"></div>
+    <div class="tscroll"><table class="ct" id="ctab"></table></div>
+  </section>
+  <section id="sources">
+    <h3>Where these numbers come from</h3>
+    <ul>
+      <li><b>Wind</b> — areas reached by tropical-storm-force (39+ mph), 58+ mph and hurricane-force (74+ mph) sustained winds, from the
+        NHC/JTWC best-track wind radii in <a href="https://www.ncei.noaa.gov/products/international-best-track-archive">IBTrACS v04r01</a>,
+        swept along the track exactly as drawn on the <a href="../">track explorer</a>. A county counts if any part of it was inside.
+        Radii are analysed routinely only since 2004, which is why the list starts then.</li>
+      <li><b>Rain</b> — storm-period totals from <a href="https://prism.oregonstate.edu">PRISM</a> daily 4-km precipitation
+        (PRISM Group, Oregon State University), counting each day's rain only within 500 km of the storm's centre (lower 48 states only).
+        Gridded values smooth out the very highest gauge readings.</li>
+      <li><b>Flooding</b> — high-water marks surveyed after the storm by the <a href="https://stn.wim.usgs.gov/stn/">USGS Short-Term Network</a>:
+        depth of water above the ground (coastal surge and inland river flooding), and water-surface elevation (feet above NAVD88, roughly sea level).
+        Only storms USGS surveyed have marks.
+        Peak storm surge per hurricane landfall from Klotzbach et al. (2026, <i>npj Natural Hazards</i>), using the observed surge database of Needham and Keim (2012) as updated there.</li>
+      <li><b>Deaths, injuries, damage, tornadoes by county</b> — <a href="https://www.ncdc.noaa.gov/stormevents/">NCEI Storm Events Database</a>:
+        reports tied to the storm (tropical-storm, hurricane and storm-surge reports near the track, plus any report whose narrative names the storm).
+        Reports filed for forecast zones are split evenly across the zone's counties. Damage is as reported at the time (not adjusted for inflation), and is incomplete.</li>
+      <li><b>Direct deaths (storm total, by cause and state)</b> — Muller et al. (2026), <i>Continental United States direct Atlantic tropical cyclone fatalities: 1963–2024</i>,
+        <a href="https://github.com/DrJoMuller/CONUS-TC-Fatalities-1963-2024">dataset</a>. Atlantic storms, lower 48 states.</li>
+      <li><b>Normalized damage</b> — Mooney et al. (2026) estimate for each continental U.S. hurricane landfall: the damage the storm would cause with today's housing stock, in 2024 dollars (via Klotzbach et al. 2026).</li>
+      <li><b>Population</b> — U.S. Census Bureau Vintage 2024 county estimates: today's residents, not those at the time of the storm.</li>
+    </ul>
+    <p>Built by Dan Chavas (Purdue) · <a href="../">Track &amp; wind-field explorer</a> · <span id="built"></span></p>
+  </section>
+</main>
+<script src="app.js?v=1"></script>
+</body>
+</html>

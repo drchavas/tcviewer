@@ -9,3 +9,6 @@
 **/.DS_Store
 Icon?
 ._*
+
+# build_impacts.py download cache (Storm Events, PRISM, USGS) — rebuildable, ~1.3 GB
+.impacts_cache/
