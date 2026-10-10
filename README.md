@@ -148,11 +148,14 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   map with **layer chips that toggle independently and stack** (Hazards: wind, rain, flooding, tornadoes ·
   Impacts: deaths, injuries, damage · Exposure: population) — each newly turned-on layer draws on top (numbered
   badges), one opacity slider, stacked collapsible legend, tooltip lists every active layer — plus a one-of
-  **Backdrop** menu matching extremewx.org's scsdash: Plain (Esri dark grey canvas), Topography (Esri
-  World_Physical_Map, native z8), Night lights (NASA GIBS VIIRS Black Marble 2016, native z8), Highways (Esri
-  World_Street_Map). Light backdrops switch the track/outline/mesh colours to dark. → storm-overview / county
+  **Backdrop** set (same sources as extremewx.org's scsdash) that toggle independently and blend, over an
+  always-on Esri dark grey canvas: Topography (Esri World_Physical_Map, native z8), Night lights (NASA GIBS
+  VIIRS Black Marble 2016, native z8 — recoloured client-side by `GlowTiles` into an amber glow whose alpha
+  follows brightness, so the black sky is transparent; GIBS sends CORS headers), Highways (Esri
+  World_Street_Map, `mix-blend-mode: multiply`). **Default: Topography + Night lights.** A second slider sets
+  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. → storm-overview / county
   card (click a county) → sortable county table (sorted by the newest layer) → sources.
-  URL: `?storm=&layers=wind,rain&bg=topo&op=75&county=`.
+  URL: `?storm=&layers=wind,rain&bg=topo,lights&op=75&bgop=100&county=` (`bg=none` for the plain map).
 - **Main page link**: `../?sid=<IBTrACS SID>` opens that storm in the track explorer (added to index.html).
 
 ### Rebuilding the data: `python3 build_impacts.py`

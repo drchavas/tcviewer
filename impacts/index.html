@@ -74,8 +74,7 @@
   .lopts label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
   #opac{width:120px;padding:0;accent-color:var(--accent)}
   .lhint{font-size:12px;color:var(--faint)}
-  .bchip i{border-radius:50%;background:transparent !important;border:1.5px solid #8899aa;opacity:1;box-shadow:none !important}
-  .bchip.on i{background:var(--accent) !important;border-color:var(--accent)}
+  #bgopac{width:100px;padding:0;accent-color:#c3c9d1}
   .mapbox{position:relative;height:620px}
   #map{position:absolute;inset:0;background:#0b1119}
   #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;width:300px;max-height:calc(100% - 20px);overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.35)}
@@ -189,8 +188,9 @@
     <div class="mapcol">
       <div class="maptools">
         <div class="lbox" id="layerBox"></div>
-        <div class="lopts"><label for="opac">Opacity</label><input id="opac" type="range" min="15" max="100" value="75">
-          <span class="lhint">Turn on as many layers as you like — each new one is drawn on top. Hover a name for its source.</span></div>
+        <div class="lopts"><label for="opac">Layers</label><input id="opac" type="range" min="15" max="100" value="75">
+          <label for="bgopac">Backdrop</label><input id="bgopac" type="range" min="0" max="100" value="100">
+          <span class="lhint">Turn on as many layers and backdrops as you like — each new layer is drawn on top. Sliders set how strongly each shows; hover a name for its source.</span></div>
       </div>
       <div class="mapbox"><div id="map"></div><div id="legend"></div><div class="loading" id="loading">Loading…</div></div>
     </div>

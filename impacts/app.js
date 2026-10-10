@@ -135,25 +135,31 @@ const GCOL = {Hazards:COL.haz, Impacts:COL.imp, Exposure:COL.exp, Backdrop:'#c3c
 /* Backdrops — the same menu as extremewx.org's scsdash: whole-map tiles underneath the county layers.
    Topography is Esri's World_Physical_Map (hypsometric tint + relief; native to z8). Night lights are
    NASA's VIIRS Black Marble (radiance, a proxy for where people are, not a population count). */
+const PLAIN = {url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+               attr:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'};
+/* Backdrops toggle independently and are blended, not just stacked. Night lights are recoloured in the
+   browser into a warm glow whose transparency follows brightness (black sky → fully transparent), so
+   they read over the light topography too; highways use "multiply" (white paper drops out, roads and
+   labels stay). Order bottom→top: dark canvas, topography, night lights, highways. */
 const BASES = {
-  plain:{label:'Plain', url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-         maxNative:16, attr:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', light:false,
-         note:'Dark grey map'},
-  topo: {label:'Topography', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}',
+  topo: {label:'Topography', sw:'linear-gradient(135deg,#7fa36b,#d9c99a)', z:210, blend:'normal', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}',
          maxNative:8, attr:'Physical map tiles &copy; Esri, U.S. National Park Service', light:true,
-         note:'Terrain: elevation tint and shaded relief (Esri World Physical Map)'},
-  lights:{label:'Night lights', url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
+         note:'Topography: Esri World Physical Map (elevation tint and relief)'},
+  lights:{label:'Night lights', sw:'radial-gradient(circle,#fff3c4 20%,#ffb347 45%,#2a2f3a 75%)', z:220, blend:'normal', glow:true, url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
          maxNative:8, attr:'Night lights: NASA GIBS &middot; VIIRS Black Marble (2016)', light:false,
-         note:'Where people are: city lights seen from space (NASA VIIRS Black Marble, 2016). Light, not a population count.'},
-  road: {label:'Highways', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+         note:'Night lights: NASA VIIRS Black Marble 2016 — where people are; light, not a population count'},
+  road: {label:'Highways', sw:'linear-gradient(135deg,#efe9dc 45%,#e2733a 50%,#efe9dc 55%)', z:230, blend:'multiply', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
          maxNative:16, attr:'Street tiles &copy; Esri, HERE, Garmin', light:true,
-         note:'Roads, towns and place names (Esri World Street Map)'},
+         note:'Highways: Esri World Street Map (roads, towns, place names)'},
 };
 
 // ---------------------------------------------------------------- map
 const map = L.map('map', {worldCopyJump:false}).setView([32,-85], 5);
-let base = BASES[new URLSearchParams(location.search).get('bg')] ? new URLSearchParams(location.search).get('bg') : 'plain';
-let baseTiles = null;
+const bgParam = new URLSearchParams(location.search).get('bg');
+const DEFAULT_BG = ['topo', 'lights'];
+let bases = new Set(bgParam == null ? DEFAULT_BG : bgParam.split(',').filter(k => BASES[k]));
+let bgOpac = Math.min(1, Math.max(0, (+new URLSearchParams(location.search).get('bgop') || 100) / 100));
+const baseTiles = {};
 const pane = (n, z, pe) => { map.createPane(n); map.getPane(n).style.zIndex = z; if(!pe) map.getPane(n).style.pointerEvents = 'none'; };
 pane('pbg', 250); pane('pfill', 300, true); pane('psel', 325); pane('pmesh', 320); pane('pswath', 330); pane('ptrack', 420); pane('ppts', 440, true);
 const fillR = L.canvas({pane:'pfill', padding:0.3});
@@ -162,16 +168,48 @@ const cMesh = L.geoJSON(topojson.mesh(ctopo, cObj), {pane:'pmesh', renderer:mesh
   style:{color:'#d6e0ea', weight:0.4, opacity:0.22}}).addTo(map);
 const sMesh = L.geoJSON(topojson.mesh(stopo, stopo.objects[Object.keys(stopo.objects)[0]]), {pane:'pmesh', renderer:meshR, interactive:false,
   style:{color:'#d6e0ea', weight:1.1, opacity:0.6}}).addTo(map);
-function setBase(k){
-  base = BASES[k] ? k : 'plain'; const b = BASES[base];
-  if(baseTiles) map.removeLayer(baseTiles);
-  baseTiles = L.tileLayer(b.url, {attribution:b.attr, maxZoom:16, maxNativeZoom:b.maxNative}).addTo(map);
-  // light backdrops need dark lines
-  cMesh.setStyle(b.light ? {color:'#2b3440', weight:0.4, opacity:0.35} : {color:'#d6e0ea', weight:0.4, opacity:0.22});
-  sMesh.setStyle(b.light ? {color:'#1f2630', weight:1.2, opacity:0.75} : {color:'#d6e0ea', weight:1.1, opacity:0.6});
-  document.getElementById('map').classList.toggle('lightbase', !!b.light);
+L.tileLayer(PLAIN.url, {attribution:PLAIN.attr, maxZoom:16}).addTo(map);      // always underneath
+for(const [k, b] of Object.entries(BASES)){
+  pane('pb_' + k, b.z); map.getPane('pb_' + k).style.mixBlendMode = b.blend;
 }
-setBase(base);
+// Night-light tiles -> warm glow, alpha from brightness (GIBS sends CORS headers, so pixels are readable)
+const GlowTiles = L.TileLayer.extend({
+  createTile(coords, done){
+    const sz = this.getTileSize(), c = document.createElement('canvas'); c.width = sz.x; c.height = sz.y;
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0, sz.x, sz.y);
+      try{
+        const d = g.getImageData(0, 0, sz.x, sz.y), a = d.data;
+        for(let i = 0; i < a.length; i += 4){
+          const l = (0.3 * a[i] + 0.59 * a[i+1] + 0.11 * a[i+2]) / 255;
+          const t = Math.min(1, Math.max(0, (l - 0.07) * 2.3));
+          a[i] = 255; a[i+1] = 120 + 110 * t; a[i+2] = 20 + 130 * t * t; a[i+3] = Math.round(255 * Math.min(1, t * 1.6));
+        }
+        g.putImageData(d, 0, 0);
+      }catch(e){ /* tainted canvas: leave the raw tile */ }
+      done(null, c);
+    };
+    img.onerror = e => done(e, c);
+    img.src = this.getTileUrl(coords);
+    return c;
+  }
+});
+const isLight = () => bgOpac >= 0.5 && [...bases].some(k => BASES[k].light);
+function applyBases(){
+  for(const [k, b] of Object.entries(BASES)){
+    const on = bases.has(k);
+    if(on && !baseTiles[k]) baseTiles[k] = new (b.glow ? GlowTiles : L.TileLayer)(b.url, {pane:'pb_' + k, attribution:b.attr, maxZoom:16, maxNativeZoom:b.maxNative});
+    if(baseTiles[k]){ if(on) baseTiles[k].addTo(map); else map.removeLayer(baseTiles[k]); }
+    map.getPane('pb_' + k).style.opacity = bgOpac;
+  }
+  // light backdrops need dark lines
+  const lt = isLight();
+  cMesh.setStyle(lt ? {color:'#2b3440', weight:0.4, opacity:0.35} : {color:'#d6e0ea', weight:0.4, opacity:0.22});
+  sMesh.setStyle(lt ? {color:'#1f2630', weight:1.2, opacity:0.75} : {color:'#d6e0ea', weight:1.1, opacity:0.6});
+  document.getElementById('map').classList.toggle('lightbase', lt);
+}
+applyBases();
 let fills = [], selLayer = null, ptsLayer = null, overLayer = L.layerGroup().addTo(map);
 
 // ---------------------------------------------------------------- state
@@ -223,9 +261,16 @@ const sel = $('#stormSel'), q = $('#q');
   bdiv.innerHTML = `<b style="color:${GCOL.Backdrop}">Backdrop</b>`; box.appendChild(bdiv);
   for(const [k, b] of Object.entries(BASES)){
     const c = document.createElement('button'); c.className = 'lchip bchip'; c.dataset.base = k; c.title = b.note;
-    c.innerHTML = `<i class="radio"></i>${b.label}`;
-    c.onclick = () => { setBase(k); drawOverlays(); renderLegend(); syncChips(); syncURL(); }; bdiv.appendChild(c);
+    c.innerHTML = `<i style="background:${b.sw}"></i>${b.label}`;
+    c.onclick = () => { bases.has(k) ? bases.delete(k) : bases.add(k); applyBases(); drawOverlays(); renderLegend(); syncChips(); syncURL(); };
+    bdiv.appendChild(c);
   }
+  const bo = $('#bgopac'); bo.value = Math.round(bgOpac * 100);
+  bo.addEventListener('input', () => {
+    const wasLight = isLight(); bgOpac = bo.value / 100; applyBases();
+    if(isLight() !== wasLight) drawOverlays();
+    syncURL();
+  });
   const op = $('#opac'); op.value = Math.round(opac * 100);
   op.addEventListener('input', () => { opac = op.value / 100; for(const f of fills) f.setStyle({fillOpacity:opac}); syncURL(); });
 }
@@ -236,7 +281,7 @@ function toggleLayer(k){
   syncChips(); drawLayers(); renderTable(); syncURL();
 }
 function syncChips(){
-  document.querySelectorAll('.bchip').forEach(b => b.classList.toggle('on', b.dataset.base === base));
+  document.querySelectorAll('.bchip').forEach(b => b.classList.toggle('on', bases.has(b.dataset.base)));
   document.querySelectorAll('.lchip:not(.bchip)').forEach(b => {
     const l = LBYK[b.dataset.k], u = layerUnavailable(l);
     const on = active.includes(l.k);
@@ -279,7 +324,9 @@ function syncURL(){
   if(!cur) return;
   const p = new URLSearchParams({storm:cur.slug});
   if(active.join(',') !== 'wind') p.set('layers', active.join(',') || 'none');
-  if(base !== 'plain') p.set('bg', base);
+  const bg = [...bases].sort().join(',');
+  if(bg !== [...DEFAULT_BG].sort().join(',')) p.set('bg', bg || 'none');
+  if(Math.round(bgOpac * 100) !== 100) p.set('bgop', Math.round(bgOpac * 100));
   if(Math.round(opac * 100) !== 75) p.set('op', Math.round(opac * 100));
   if(selC) p.set('county', selC);
   history.replaceState(null, '', '?' + p.toString());
@@ -380,7 +427,7 @@ function drawOverlays(){
   const sw = S.swaths || {};
   const drawSw = (k, style) => (sw[k] || []).forEach(poly =>
     L.polygon(poly.map(r => r.map(([x, y]) => [y, x])), Object.assign({pane:'pswath', interactive:false, fill:false}, style)).addTo(overLayer));
-  const lt = BASES[base].light;
+  const lt = isLight();
   drawSw('r34', {color:lt ? '#1d2b3a' : '#cfe3f5', weight:1.2, opacity:lt ? 0.7 : 0.55, dashArray:'5 5'});
   drawSw('r64', {color:lt ? '#0b1119' : '#ffffff', weight:1.4, opacity:lt ? 0.8 : 0.7});
   const ll = S.track.map(p => [p[1], p[2]]);
@@ -481,7 +528,7 @@ function legendSection(l){
 function renderLegend(){
   const secs = [...active].reverse().map(k => legendSection(LBYK[k]));
   if(!secs.length) secs.push('<div class="lsec"><div class="lt">No data layers on</div></div>');
-  if(base !== 'plain') secs.push(`<div class="extra">Backdrop: ${esc(BASES[base].note)}</div>`);
+  for(const k of Object.keys(BASES)) if(bases.has(k)) secs.push(`<div class="extra">${esc(BASES[k].note)}</div>`);
   const lg = $('#legend');
   lg.innerHTML = '<button class="lhead" type="button">Legend <span>▾</span></button><div class="lbody">' + secs.join('')
     + '<div class="extra">Line: track · dashed: 39+ mph wind area · solid: 74+ mph</div></div>';
