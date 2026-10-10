@@ -34,6 +34,7 @@ the three history modes to explain the ringed positions.
 - `data/basin_<B>.json` — `{ sid: [points…] }` for one basin, fetched on demand and cached
   in memory (revisiting a basin is instant). The host CDN compresses these on the fly.
 - `process_storms.py`, `update_data.sh` — rebuild the data from IBTrACS.
+- `landfall.js` — county wind-exposure add-on (preview; see below).
 - `geo/states.topo.json.gz`, `geo/counties.topo.json.gz` — U.S. border TopoJSON (Census cartographic
   boundaries), copied from extremewx.org's `scs/trends/geo/`; gzipped on disk, decompressed in the browser.
 - `CNAME` — custom domain for GitHub Pages.
@@ -103,6 +104,21 @@ and tracks), with copies at ±360° so Alaska/Hawaii keep outlines on wrapped ma
 show only at zoom ≥ 4 (`COUNTY_MINZOOM`); below that the legend says "(zoom in)". The `.gz` files
 are fetched raw and un-gzipped with `DecompressionStream`, falling back to plain JSON if a host
 ever serves them with `Content-Encoding: gzip`.
+
+### County wind exposure ("Landfall", preview — `?landfall=1`)
+`landfall.js` loads only when the URL has `?landfall=1`, so the public page is unchanged. For the
+storm on screen (Single Storm mode) it rasterises the 34/50/64 kt wind-radii swath unions — the same
+polygons the map draws, shared via `TCV.swathUnion()` and cached per storm — and every U.S. county
+onto one ~0.02° lat/lon grid, then counts cells to get the **share of each county's area** inside each
+swath. Counties are coloured by the strongest level reached (one magenta hue, brighter = stronger);
+a Threshold select (34/50/64 kt) and a "counts if" rule (any part / ≥25% / ≥50% of area) drive the
+outlines, the summary (counties, states, population, area-weighted population) and the sortable list
+(click a row to zoom). Hover a coloured county for its shares and population. ~0.6–0.9 s per storm.
+- Hooks in `index.html`: `window.TCV` (`map`, `ix`, `current`, `swathUnion`, `countyTopo`, `geoReady`)
+  and a `tcv:storm` event after each single-storm render (`detail:null` in the history modes).
+- `geo/county_pop.json` — Census Vintage 2024 county estimates (PR municipios from prm-est2024; CT's 8
+  former counties, which the county file uses, from Vintage 2020 scaled to CT's 2024 total).
+- Next: tcwindprofile-based peak wind & duration per county (precomputed), Storm Events impacts.
 
 ## Basemap
 Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CARTO's key-free dark

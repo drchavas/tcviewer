@@ -437,6 +437,10 @@ window.__initViewer = function(){
 
   // ---------- map ----------
   const map = L.map('map', {worldCopyJump:false}).setView([25,-70], 4);
+  // Hooks for optional add-on modules (e.g. landfall.js, loaded only with ?landfall=1).
+  // They read the current storm from TCV.current and listen for the 'tcv:storm' event.
+  const TCV = window.TCV = {map, ix, current:null};
+  let geoReadyResolve; TCV.geoReady = new Promise(r=>{ geoReadyResolve=r; });
   // Esri's free canvas basemap (no API key). NOTE: Esri tile URLs are {z}/{y}/{x}
   // (row before column) — using {z}/{x}/{y} silently serves scrambled tiles.
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
@@ -528,6 +532,7 @@ window.__initViewer = function(){
   if(window.topojson && 'DecompressionStream' in window){
     Promise.all([gzJSON('geo/counties.topo.json.gz'), gzJSON('geo/states.topo.json.gz')])
       .then(([ctopo, stopo]) => {
+        TCV.countyTopo = ctopo; geoReadyResolve(ctopo);
         countyLines = meshLayer(ctopo, {color:'#d6e0ea', weight:0.5, opacity:0.28});
         stateLines  = meshLayer(stopo, {color:'#d6e0ea', weight:1.1, opacity:0.6});
         applyBorders();
@@ -785,17 +790,38 @@ window.__initViewer = function(){
   // Build the wind-footprint swaths for a storm's points — but only for layers whose legend
   // checkbox is on, and never when the current selection is "heavy" (too many storms). Computing
   // these unions is by far the slowest step, so skipping hidden/irrelevant ones is the big win.
+  // Per-timestep footprint inputs for one swath kind ('r34' | 'r50' | 'r64' | 'rmw').
+  function swathItems(pts, ulon, kind){
+    return pts.map((p,i)=>{
+      const d=pointData(p);
+      let radii;
+      if(kind==='rmw') radii = (d.rmw!=null&&d.rmw>0) ? [d.rmw,d.rmw,d.rmw,d.rmw] : null;
+      else { const r = d[kind]; radii = r.some(x=>x!=null&&x>0) ? r : null; }
+      return radii ? {lat:d.lat, lon:ulon[i], radii} : null;
+    });
+  }
+  // Union of one swath kind for a storm, cached per storm (the union is the slow step, and
+  // add-ons such as landfall.js need the same polygons the map draws).
+  let swathCache = {pts:null, u:{}};
+  function swathUnion(pts, ulon, kind){
+    if(swathCache.pts !== pts) swathCache = {pts, u:{}};
+    if(!(kind in swathCache.u)){
+      const polys = swathPolys(swathItems(pts, ulon, kind));
+      swathCache.u[kind] = polys.length ? unionAll(polys) : null;
+    }
+    return swathCache.u[kind];
+  }
+  TCV.swathUnion = swathUnion;
   function renderSwaths(pts, ulon){
     const build=(kind, group, pane, style, on)=>{
       if(!on) return;
-      const items = pts.map((p,i)=>{
-        const d=pointData(p);
-        let radii;
-        if(kind==='rmw') radii = (d.rmw!=null&&d.rmw>0) ? [d.rmw,d.rmw,d.rmw,d.rmw] : null;
-        else { const r = (kind==='r34') ? d.r34 : d.r64; radii = r.some(x=>x!=null&&x>0) ? r : null; }
-        return radii ? {lat:d.lat, lon:ulon[i], radii} : null;
-      });
-      try{ drawUnion(swathPolys(items), group, pane, style); }catch(e){ console.error(kind+' swath failed', e); }
+      try{
+        const uni = swathUnion(pts, ulon, kind);
+        if(uni) for(const poly of uni){
+          const rings = poly.map(ring=>ring.map(pt=>[pt[1],pt[0]]));  // [x,y]->[lat,lon]
+          L.polygon(rings, Object.assign({pane, interactive:false, weight:1.6, opacity:0.9}, style)).addTo(group);
+        }
+      }catch(e){ console.error(kind+' swath failed', e); }
     };
     build('r34', r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}, t34.checked);
     build('r64', r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}, t64.checked);
@@ -873,6 +899,8 @@ window.__initViewer = function(){
       `${basinName(storm.basin)} &middot; ${pts.length} pts &middot; peak ${peak>-99? peak+' kt':'—'} (${catName})`;
 
     buildTS(pts);   // lifecycle time series below the map
+    TCV.current = {storm, pts, ulon};
+    document.dispatchEvent(new CustomEvent('tcv:storm', {detail:TCV.current}));
   }
 
   function titleCase(s){ return s.replace(/\w\S*/g, t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()); }
@@ -1031,6 +1059,7 @@ window.__initViewer = function(){
   // ring the positions that fall in the selected window (opts.inHi), label & make clickable.
   async function showHistory(opts){
     lastRender = ()=>showHistory(opts);
+    TCV.current = null; document.dispatchEvent(new CustomEvent('tcv:storm', {detail:null}));
     const active = opts.storms;
     const basins = [...new Set(active.map(s=>s.basin))];
     const token = ++renderToken;
@@ -1191,6 +1220,12 @@ window.__initViewer = function(){
       }
     }
   });
+
+  // ---------- optional add-ons ----------
+  // County wind exposure ("Landfall") is in preview: it loads only with ?landfall=1 in the URL.
+  if(new URLSearchParams(location.search).has('landfall')){
+    const sc=document.createElement('script'); sc.src='landfall.js?v=1'; document.body.appendChild(sc);
+  }
 };
 </script>
 <script>
