@@ -300,10 +300,10 @@ function syncChips(){
 
 // ---------------------------------------------------------------- load a storm
 async function loadStorm(slug){
-  $('#loading').style.display = 'flex';
+  const ld = $('#loading'); ld.style.display = 'flex'; ld.textContent = 'Loading…';
   let d;
   try{ d = await fetch(`data/storms/${slug}.json`).then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }); }
-  catch(e){ $('#loading').textContent = 'Could not load this storm.'; return; }
+  catch(e){ console.error('storm load failed', slug, e); ld.textContent = 'Could not load this storm \u2014 try another, or reload the page.'; return; }
   S = d; cur = BYSLUG[slug]; selC = null; sortK = null;
   POPOF = c => POP[c._g] ?? null;
   for(const [g, c] of Object.entries(S.counties)) c._g = g;
@@ -525,6 +525,7 @@ function drawHWM(){
 function drawTor(){
   const EFC = ['#ffe9a8','#ffd166','#f4a432','#e2711d','#c1440e','#8f1d0b'];
   for(const [la, lo, ef] of S.tor || []){
+    if(la == null || lo == null) continue;
     const c = ef >= 0 ? EFC[Math.min(ef, 5)] : '#cfd6dd';
     L.marker([la, lo], {pane:'ppts', icon:L.divIcon({className:'', iconSize:[14,14], iconAnchor:[7,9],
       html:`<svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1 L13 12.5 L1 12.5 Z" fill="${c}" stroke="#0b1119" stroke-width="1.1"/></svg>`})})

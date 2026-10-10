@@ -529,7 +529,9 @@ def se_summarise(rows, C):
             m = re.search(r"(\d)", str(r["TOR_F_SCALE"]))
             ef = int(m.group(1)) if m else -1
             try:
-                tors.append([round(float(r["BEGIN_LAT"]), 3), round(float(r["BEGIN_LON"]), 3), ef])
+                la, lo = float(r["BEGIN_LAT"]), float(r["BEGIN_LON"])
+                if math.isfinite(la) and math.isfinite(lo):   # some reports have no begin point
+                    tors.append([round(la, 3), round(lo, 3), ef])
             except Exception:
                 pass
         if not k:
@@ -580,8 +582,8 @@ def stn_stage(s, C, ev):
     pts, cty = [], {}
     for h in json.load(open(p)):
         la, lo = h.get("latitude_dd") or h.get("latitude"), h.get("longitude_dd") or h.get("longitude")
-        if la is None or lo is None:
-            continue
+        if not (isinstance(la, (int, float)) and isinstance(lo, (int, float)) and math.isfinite(la) and math.isfinite(lo)):
+            continue                                   # a few STN marks have NaN coordinates
         hag, el = h.get("height_above_gnd"), h.get("elev_ft")
         if hag is not None and not (-1 <= hag <= HWM_MAX_FT):
             hag = None                                 # obvious entry errors (e.g. 152 ft above ground)
@@ -927,6 +929,17 @@ def r1(x, n=2):
     return None if x is None else round(float(x), n)
 
 
+def clean_nan(x):
+    """NaN/inf -> None, recursively: browsers' JSON.parse rejects NaN, so one bad value breaks a whole storm."""
+    if isinstance(x, float):
+        return x if math.isfinite(x) else None
+    if isinstance(x, dict):
+        return {k: clean_nan(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [clean_nan(v) for v in x]
+    return x
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", nargs="*", help="slugs to (re)build, e.g. helene-2024")
@@ -1045,7 +1058,7 @@ def main():
             "outage": outage,
         }
         with open(os.path.join(OUT, "storms", s["slug"] + ".json"), "w") as f:
-            json.dump(rec, f, separators=(",", ":"))
+            json.dump(clean_nan(rec), f, separators=(",", ":"), allow_nan=False)
         dmg = sum(x["dmg"] for x in klo if x.get("dmg")) or None
         surge = max([x["surge_obs"] for x in klo if x.get("surge_obs")] or [None]) if klo else None
         hwmx = max([p[2] for p in (stn["pts"] if stn else []) if p[2] is not None] or [None]) if stn else None
@@ -1065,8 +1078,8 @@ def main():
         })
     index.sort(key=lambda x: (x["t"][0]), reverse=True)
     with open(ip, "w") as f:
-        json.dump({"built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-                   "year0": YEAR0, "storms": index}, f, separators=(",", ":"))
+        json.dump(clean_nan({"built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                   "year0": YEAR0, "storms": index}), f, separators=(",", ":"), allow_nan=False)
     log(f"wrote {len(index)} storms -> {os.path.relpath(OUT, HERE)}")
 
 
