@@ -56,7 +56,7 @@
   .tile .s{font-size:11.5px;color:var(--faint);margin-top:1px}
   .tile.na .v{color:var(--faint);font-size:16px;font-weight:600}
 
-  .mapsec{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;margin-top:12px}
+  .mapsec{margin-top:12px}
   .mapcol{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
   .maptools{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
   .lbox{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
@@ -75,7 +75,7 @@
   #opac{width:120px;padding:0;accent-color:var(--accent)}
   .lhint{font-size:12px;color:var(--faint)}
   #bgopac{width:100px;padding:0;accent-color:#c3c9d1}
-  .mapbox{position:relative;height:620px}
+  .mapbox{position:relative;height:min(72vh,680px);min-height:460px}
   #map{position:absolute;inset:0;background:#0b1119}
   #legend{position:absolute;left:10px;bottom:10px;z-index:500;background:rgba(22,33,46,.94);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;width:300px;max-height:calc(100% - 20px);overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.35)}
   #legend .lsec{margin-bottom:7px}
@@ -94,22 +94,34 @@
   #legend .row{display:flex;align-items:center;gap:7px;margin:2px 0}
   #legend .sw{width:16px;height:11px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.18)}
   #legend .extra{color:var(--muted);margin-top:5px;font-size:11.5px}
-  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:600;background:rgba(15,23,32,.55);font-size:14px;color:var(--muted)}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1001;background:rgba(15,23,32,.55);font-size:14px;color:var(--muted)}
 
-  aside#card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-height:681px;overflow-y:auto}
+  /* county details: a small closable box over the map */
+  aside#card{position:absolute;top:10px;right:10px;z-index:1001;width:340px;max-height:calc(100% - 20px);overflow-y:auto;
+    background:#16212e;border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  aside#card[hidden]{display:none}
+  #card .xclose{position:sticky;top:0;float:right;margin:-6px -8px 0 6px;z-index:2;background:#16212e;border-radius:6px;border:none;color:var(--muted);font-size:20px;line-height:1;padding:2px 4px;cursor:pointer}
+  #card .xclose:hover{color:var(--text)}
+  #card h3, #overview h3{padding-right:22px}
+  /* storm overview, below the numbers, flowing into columns */
+  #overview{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  #overview .ovhead h3{margin:0;font-size:17px}
+  #overview .ovhead .csub{color:var(--muted);font-size:13px;margin-top:2px}
+  #overview .ovbody{columns:3 300px;column-gap:28px;margin-top:4px}
+  #overview .ovblk{break-inside:avoid;padding-bottom:4px}
   #card h3{margin:0;font-size:19px}
-  #card .csub{color:var(--muted);font-size:13px;margin-top:2px}
-  #card h4{margin:16px 0 6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
-  #card h4 i{width:8px;height:8px;border-radius:2px;display:inline-block}
-  #card table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
-  #card td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(42,58,77,.6)}
-  #card td.k{color:var(--muted);padding-right:10px}
-  #card td.v{text-align:right;font-weight:600}
-  #card .note{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.45}
+  #card .csub, #overview .csub{color:var(--muted);font-size:13px;margin-top:2px}
+  #card h4, #overview h4{margin:16px 0 6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
+  #card h4 i, #overview h4 i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  #card table, #overview table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+  #card td, #overview td{padding:3px 0;vertical-align:top;border-top:1px solid rgba(42,58,77,.6)}
+  #card td.k, #overview td.k{color:var(--muted);padding-right:10px}
+  #card td.v, #overview td.v{text-align:right;font-weight:600}
+  #card .note, #overview .note{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.45}
   #card .back{font-size:13px;margin-bottom:8px;background:none;border:none;color:var(--accent);padding:0}
-  #card .toplist button{background:none;border:none;color:var(--text);padding:2px 0;font-size:13.5px;text-align:left;width:100%;display:flex;justify-content:space-between;gap:10px;border-top:1px solid rgba(42,58,77,.6);border-radius:0}
-  #card .toplist button:hover{color:var(--accent)}
-  #card .toplist button b{font-variant-numeric:tabular-nums}
+  #card .toplist button, #overview .toplist button{background:none;border:none;color:var(--text);padding:2px 0;font-size:13.5px;text-align:left;width:100%;display:flex;justify-content:space-between;gap:10px;border-top:1px solid rgba(42,58,77,.6);border-radius:0}
+  #card .toplist button:hover, #overview .toplist button:hover{color:var(--accent)}
+  #card .toplist button b, #overview .toplist button b{font-variant-numeric:tabular-nums}
   .bar{height:7px;border-radius:3px;background:var(--panel2);overflow:hidden;margin-top:3px}
   .ochart{position:relative}
   .ochart svg{width:100%;height:130px;display:block;overflow:visible}
@@ -144,8 +156,6 @@
 
   @media (max-width:1050px){
     .tiles{grid-template-columns:1fr 1fr}
-    .mapsec{grid-template-columns:1fr}
-    aside#card{max-height:none}
   }
   @media (max-width:640px){
     body{font-size:14px}
@@ -156,7 +166,8 @@
     #stormHead h2{font-size:24px}
     #stormHead .lfline{font-size:15px}
     .tiles{grid-template-columns:1fr}
-    .mapbox{height:72vh}
+    .mapbox{height:72vh;min-height:380px}
+    aside#card{top:auto;bottom:8px;left:8px;right:8px;width:auto;max-height:62%}
     #legend{width:230px;font-size:11px;max-height:45%}
     .lhint{display:none}
     #tfilter{width:100%;margin-left:0}
@@ -188,7 +199,6 @@
     <p class="lfline" id="lfline"></p>
     <div class="links" id="links"></div>
   </section>
-  <section class="tiles" id="tiles"></section>
   <section class="mapsec">
     <div class="mapcol">
       <div class="maptools">
@@ -197,10 +207,13 @@
           <label for="bgopac">Backdrop</label><input id="bgopac" type="range" min="0" max="100" value="100">
           <span class="lhint">Turn on as many layers and backdrops as you like — each new layer is drawn on top. Sliders set how strongly each shows; hover a name for its source.</span></div>
       </div>
-      <div class="mapbox"><div id="map"></div><div id="legend"></div><div class="loading" id="loading">Loading…</div></div>
+      <div class="mapbox"><div id="map"></div><div id="legend"></div>
+        <aside id="card" hidden></aside>
+        <div class="loading" id="loading">Loading…</div></div>
     </div>
-    <aside id="card"></aside>
   </section>
+  <section class="tiles" id="tiles"></section>
+  <section id="overview"></section>
   <section id="tableSec">
     <div class="thead"><h3>Counties</h3><span class="tcount" id="tcount"></span>
       <input id="tfilter" type="search" placeholder="Filter by county or state"></div>
@@ -237,6 +250,6 @@
     <p>Built by Dan Chavas (Purdue) · <a href="../">Track &amp; wind-field explorer</a> · <span id="built"></span></p>
   </section>
 </main>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

@@ -313,7 +313,8 @@ async function loadStorm(slug){
   syncChips();
   renderHead(); renderTiles(); drawOverlays(); drawLayers(); fitStorm();
   const pc = !loadStorm.done && params.get('county');
-  if(pc && S.counties[pc]) selectCounty(pc, true); else renderSummary();
+  renderSummary();
+  if(pc && S.counties[pc]) selectCounty(pc, true); else { $('#card').hidden = true; $('#card').innerHTML = ''; }
   renderTable(); loadStorm.done = true; syncURL();
   $('#loading').style.display = 'none';
   document.title = `${stormTitle(cur)} (${cur.year}) — hazards & impacts by county | tcviewer.org`;
@@ -585,18 +586,22 @@ function fl(h){
   if(h.hc != null) a.push(`coastal ${h.hc.toFixed(1)} ft`); if(h.hr != null) a.push(`inland ${h.hr.toFixed(1)} ft`);
   return a.length ? `deepest water above ground: ${a.join(', ')}` : (h.ec != null || h.er != null ? 'marks surveyed (no depth above ground)' : '');
 }
+function zoomTo(g){
+  const f = CF[g]; if(f) map.fitBounds(L.geoJSON(f).getBounds().pad(1.2), {maxZoom:9});
+  $('.mapsec').scrollIntoView({behavior:'smooth', block:'start'});
+}
 function selectCounty(g, noZoom){
   selC = g; drawLayers();
   renderCard(g);
   document.querySelectorAll('#ctab tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.g === g));
-  if(!noZoom && window.innerWidth <= 1050) $('#card').scrollIntoView({behavior:'smooth', block:'start'});
+  if(!noZoom && window.innerWidth <= 640) $('.mapbox').scrollIntoView({behavior:'smooth', block:'start'});
   syncURL();
 }
 function row(k, v){ return `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`; }
 function renderCard(g){
   const c = S.counties[g] || {}, pop = POP[g];
   const h = [];
-  h.push(`<button class="back" id="backBtn">← Storm overview</button>`);
+  h.push(`<button class="xclose" id="cardClose" title="Close" aria-label="Close">×</button>`);
   const area = CF[g] && CF[g].properties.AREA, dens = pop != null && area ? pop / (area / 2.58999) : null;
   h.push(`<h3>${esc(cname(g))}</h3><div class="csub">${pop ? people(pop) + ' people (2024)' : ''}${dens != null ? ' · ' + n0(dens) + ' per sq mi' : ''}</div>`);
   // hazards
@@ -633,8 +638,8 @@ function renderCard(g){
     if([c.se.dd, c.se.di, c.se.pd].some(x => Math.abs(x - Math.round(x)) > 0.01))
       h.push('<div class="note">≈: part of a report filed for a forecast zone covering several counties, split evenly between them.</div>');
   } else h.push('<div class="note">No Storm Events reports tied to this storm in this county.</div>');
-  $('#card').innerHTML = h.join('');
-  $('#backBtn').onclick = () => { selC = null; drawLayers(); renderSummary(); renderTable(); syncURL(); };
+  const card = $('#card'); card.innerHTML = h.join(''); card.hidden = false; card.scrollTop = 0;
+  $('#cardClose').onclick = closeCard;
 }
 function outageChart(){
   const O = S.outage, v = O.series.v, n = v.length;
@@ -665,7 +670,7 @@ function outageChart(){
     <div class="note">Summed over the counties the storm affected, after removing routine outages (EAGLE-I covers most but not all utilities${S.year <= 2017 ? '; coverage was patchier before 2018' : ''}${cur.states.includes('PR') ? '; Puerto Rico is not covered' : ''}).</div>`;
 }
 function wireOutageChart(){
-  const box = document.querySelector('#card .ochart'); if(!box) return;
+  const box = document.querySelector('#overview .ochart'); if(!box) return;
   const svg = box.querySelector('svg'), tip = box.querySelector('.otip'), xh = svg.querySelector('.xh');
   const v = S.outage.series.v, t0 = +box.dataset.t0, step = +box.dataset.step;
   svg.addEventListener('mousemove', e => {
@@ -677,9 +682,14 @@ function wireOutageChart(){
   });
   svg.addEventListener('mouseleave', () => { xh.setAttribute('visibility', 'hidden'); tip.style.visibility = 'hidden'; });
 }
+function closeCard(){
+  const card = $('#card'); card.hidden = true; card.innerHTML = '';
+  if(selC){ selC = null; drawLayers(); renderTable(); syncURL(); }
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#card').hidden) closeCard(); });
 function renderSummary(){
   const h = [];
-  h.push(`<h3>Storm overview</h3><div class="csub">Click any coloured county on the map, or a row in the table, for its details.</div>`);
+  const head = `<div class="ovhead"><h3>Storm overview</h3><div class="csub">Click any coloured county on the map, or a row in the table, for that county\u2019s details.</div></div>`;
   const F = S.fatalities;
   if(F){
     const CAUSE = {surge:'Storm surge', freshwater_floods:'Freshwater flooding', tree_fall:'Falling trees', wind:'Wind', tornado:'Tornadoes',
@@ -725,8 +735,11 @@ function renderSummary(){
   h.push(top({t:'Most deaths (Storm Events)', c:COL.imp}, c => c.se ? c.se.dd + c.se.di : null, v => deaths(v)));
   h.push(top({t:'Most damage (Storm Events)', c:COL.imp}, c => c.se ? c.se.pd + c.se.cd : null, v => money(v, true)));
   h.push(top({t:'Most customers without power', c:COL.imp}, c => c.o ? c.o.pk : null, v => people(v, true)));
-  $('#card').innerHTML = h.join('');
-  $('#card').querySelectorAll('.toplist button').forEach(b => b.onclick = () => selectCounty(b.dataset.g));
+  // one block per heading, flowing into columns
+  const blocks = h.join('').split('<h4').filter(x => x.trim()).map(x => `<div class="ovblk"><h4${x}</div>`);
+  const ov = $('#overview'); ov.innerHTML = head + `<div class="ovbody">${blocks.join('')}</div>`;
+  ov.hidden = !blocks.length;
+  ov.querySelectorAll('.toplist button').forEach(b => b.onclick = () => { selectCounty(b.dataset.g, true); zoomTo(b.dataset.g); });
   wireOutageChart();
 }
 
@@ -772,9 +785,7 @@ function renderTable(){
     sortK = th.dataset.k; renderTable();
   });
   t.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => {
-    selectCounty(tr.dataset.g, true);
-    const f = CF[tr.dataset.g]; if(f) map.fitBounds(L.geoJSON(f).getBounds().pad(1.2), {maxZoom:9});
-    $('.mapsec').scrollIntoView({behavior:'smooth', block:'start'});
+    selectCounty(tr.dataset.g, true); zoomTo(tr.dataset.g);
   });
 }
 

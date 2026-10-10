@@ -153,8 +153,11 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   VIIRS Black Marble 2016, native z8 — recoloured client-side by `GlowTiles` into an amber glow whose alpha
   follows brightness, so the black sky is transparent; GIBS sends CORS headers), Highways (Esri
   World_Street_Map, `mix-blend-mode: multiply`). **Default: Topography + Night lights.** A second slider sets
-  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. → storm-overview / county
-  card (click a county) → sortable county table (sorted by the newest layer) → sources.
+  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. Map is full-width, directly
+  under the layer bar; clicking a county opens a small popup card over the map's top-right corner (× or Esc
+  closes it; bottom sheet on phones) → headline-number tiles → storm overview (deaths by cause, outage curve,
+  damage/surge by landfall, Storm Events, top-county lists in flowing columns) → sortable county table
+  (sorted by the newest layer) → sources.
   URL: `?storm=&layers=wind,rain&bg=topo,lights&op=75&bgop=100&county=` (`bg=none` for the plain map).
 - **Main page link**: `../?sid=<IBTrACS SID>` opens that storm in the track explorer (added to index.html).
 
