@@ -159,7 +159,7 @@
 <header>
   <h1>Tropical Cyclone Track &amp; Wind-Field Explorer</h1>
   <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is coloured by Saffir&ndash;Simpson
-     category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force) and <b>64&nbsp;kt</b> (hurricane-force)
+     category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force), <b>50&nbsp;kt</b> and <b>64&nbsp;kt</b> (hurricane-force)
      wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.
      Source: NOAA IBTrACS v04r01 &mdash; <b>all global basins</b>, using the US agency for each
      (NHC in the Atlantic &amp; E/C Pacific, JTWC elsewhere); all storms in the record.
@@ -242,6 +242,7 @@
       <summary>Legend &amp; layers</summary>
       <div id="catLegend"></div>
       <label class="legrow" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="t34" checked><span class="sw" style="background:lightskyblue;opacity:.55"></span> Tropical storm force wind (34&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t50" checked><span class="sw" style="background:#4d9bff;opacity:.55"></span> Storm force wind (50&nbsp;kt)</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t64" checked><span class="sw" style="background:#1f6dff;opacity:.55"></span> Hurricane force wind (64&nbsp;kt)</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
       <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="tstates" checked><span class="sw" style="height:0;border:0;border-top:1.5px solid rgba(214,224,234,.8);border-radius:0"></span> U.S. state borders</label>
@@ -450,6 +451,7 @@ window.__initViewer = function(){
   map.createPane('pgrat'); map.getPane('pgrat').style.zIndex = 250;  // graticule just above tiles
   map.getPane('pgrat').style.pointerEvents = 'none';
   map.createPane('p34'); map.getPane('p34').style.zIndex = 390;
+  map.createPane('p50'); map.getPane('p50').style.zIndex = 392;
   map.createPane('p64'); map.getPane('p64').style.zIndex = 395;
   map.createPane('prmw'); map.getPane('prmw').style.zIndex = 398;
 
@@ -555,9 +557,11 @@ window.__initViewer = function(){
   let dateLayer = L.layerGroup().addTo(map); // "day view" markers/labels
   let dayMode = false;
   let r34Group = L.layerGroup();             // 34 kt footprints (toggleable)
+  let r50Group = L.layerGroup();             // 50 kt footprints (toggleable)
   let r64Group = L.layerGroup();             // 64 kt footprints (toggleable)
   let rmwGroup = L.layerGroup();             // Rmax circles (toggleable)
   const t34 = document.getElementById('t34');
+  const t50 = document.getElementById('t50');
   const t64 = document.getElementById('t64');
   const trmw = document.getElementById('trmw');
   const infoBox = document.getElementById('info');
@@ -588,6 +592,7 @@ window.__initViewer = function(){
   const hlGroup = L.layerGroup().addTo(map);
   function applyToggles(){
     if(t34.checked) r34Group.addTo(map); else map.removeLayer(r34Group);
+    if(t50.checked) r50Group.addTo(map); else map.removeLayer(r50Group);
     if(t64.checked) r64Group.addTo(map); else map.removeLayer(r64Group);
     if(trmw.checked) rmwGroup.addTo(map); else map.removeLayer(rmwGroup);
     if(curSel!=null) highlight(curSel);   // keep the clicked-point outlines in sync
@@ -606,6 +611,9 @@ window.__initViewer = function(){
     if(t34.checked){ const f=footprint(d.lat,lon,d.r34);
       if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#7fc4ff', weight:6, opacity:1,
         fillColor:'lightskyblue', fillOpacity:0.22}).addTo(hlGroup); }
+    if(t50.checked){ const f=footprint(d.lat,lon,d.r50);
+      if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#4d9bff', weight:6.2, opacity:1,
+        fillColor:'#4d9bff', fillOpacity:0.26}).addTo(hlGroup); }
     if(t64.checked){ const f=footprint(d.lat,lon,d.r64);
       if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#1f6dff', weight:6.4, opacity:1,
         fillColor:'#1f6dff', fillOpacity:0.30}).addTo(hlGroup); }
@@ -729,6 +737,7 @@ window.__initViewer = function(){
   function onToggle(){
     const turnOn=[];
     if(t34.checked  && r34Group.getLayers().length===0) turnOn.push('34 kt');
+    if(t50.checked  && r50Group.getLayers().length===0) turnOn.push('50 kt');
     if(t64.checked  && r64Group.getLayers().length===0) turnOn.push('64 kt');
     if(trmw.checked && rmwGroup.getLayers().length===0) turnOn.push('Rmax');
     applyToggles();
@@ -738,6 +747,7 @@ window.__initViewer = function(){
     }
   }
   t34.addEventListener('change', onToggle);
+  t50.addEventListener('change', onToggle);
   t64.addEventListener('change', onToggle);
   trmw.addEventListener('change', onToggle);
   applyToggles();   // put the (empty) radii groups on the map once
@@ -824,6 +834,7 @@ window.__initViewer = function(){
       }catch(e){ console.error(kind+' swath failed', e); }
     };
     build('r34', r34Group, 'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}, t34.checked);
+    build('r50', r50Group, 'p50', {color:'#4d9bff', fillColor:'#4d9bff', fillOpacity:0.13}, t50.checked);
     build('r64', r64Group, 'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}, t64.checked);
     build('rmw', rmwGroup, 'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}, trmw.checked);
   }
@@ -839,7 +850,7 @@ window.__initViewer = function(){
     catch(e){ console.error(e); window.__loadmsg.show('Could not load '+basinName(storm.basin)+' data.'); return; }
     if(token !== renderToken) return;            // a newer selection superseded this one
     window.__loadmsg.hide();
-    layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
+    layer.clearLayers(); r34Group.clearLayers(); r50Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
     hlGroup.clearLayers(); curSel = null;
     dateLayer.clearLayers(); dayMode = false;          // leaving day view
     dateSub.style.display='none'; dateSel.value='';
@@ -965,9 +976,9 @@ window.__initViewer = function(){
     stormControls.style.display = hist  ? 'none' : '';
     if(hist){ tsEl.style.display='none'; }   // no lifecycle strip in the history modes
     else { viewLocked = false; }             // back to Single Storm → let it re-centre on the storm
-    // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/64 kt
+    // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/50/64 kt
     // ON elsewhere. Rmax defaults off everywhere. The user can still toggle any layer after.
-    t34.checked = !range; t64.checked = !range; trmw.checked = false;
+    t34.checked = !range; t50.checked = !range; t64.checked = !range; trmw.checked = false;
     applyToggles();
     // map-area hint explaining the white rings, per history mode
     const hint = document.getElementById('rangeHint');
@@ -1072,7 +1083,7 @@ window.__initViewer = function(){
     try{ bd = Object.fromEntries(await Promise.all(basins.map(async b=>[b, await ensureBasin(b)]))); }
     catch(e){ console.error(e); window.__loadmsg.show('Could not load data for '+opts.label+'.'); return; }
     if(token !== renderToken) return;
-    layer.clearLayers(); r34Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
+    layer.clearLayers(); r34Group.clearLayers(); r50Group.clearLayers(); r64Group.clearLayers(); rmwGroup.clearLayers();
     hlGroup.clearLayers(); dateLayer.clearLayers();
     infoBox.style.display='none'; document.body.classList.remove('info-open');
     curPts=null; curSel=null; dayMode=true; tsEl.style.display='none';
