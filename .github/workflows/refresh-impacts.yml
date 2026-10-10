@@ -1,0 +1,71 @@
+# Monthly rebuild of the Storm Hazards & Impacts data (impacts/data/), via build_impacts.py.
+# Picks up revisions to NCEI Storm Events, PRISM rainfall, USGS high-water marks and any new
+# U.S.-affecting storms in IBTrACS. Commits impacts/data/ only if storm data changed (the
+# "built" timestamp alone doesn't count). Downloads (~1.2 GB, mostly PRISM) are cached between runs.
+# Run by hand any time: repo → Actions → "Refresh impacts data" → Run workflow.
+name: Refresh impacts data
+
+on:
+  schedule:
+    - cron: "41 11 3 * *"     # 3rd of each month, 11:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-impacts
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: pip install shapely numpy pandas openpyxl tifffile imagecodecs
+
+      - name: Restore download cache
+        uses: actions/cache@v6
+        with:
+          path: .impacts_cache
+          key: impacts-cache-${{ github.run_id }}
+          restore-keys: impacts-cache-
+
+      - name: Build impacts data
+        run: python3 build_impacts.py
+
+      - name: Check whether storm data changed
+        id: diff
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def load(src):
+              d = json.loads(src); d.pop("built", None); return d
+          old = subprocess.run(["git", "show", "HEAD:impacts/data/index.json"], capture_output=True, text=True).stdout
+          new = open("impacts/data/index.json").read()
+          changed = (not old) or load(old) != load(new)
+          changed |= subprocess.run(["git", "diff", "--quiet", "--", "impacts/data/",
+                                     ":(exclude)impacts/data/index.json"]).returncode != 0
+          changed |= subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "impacts/data/"],
+                                    capture_output=True, text=True).stdout.strip() != ""
+          print("impacts data changed:", changed)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"changed={'true' if changed else 'false'}\n")
+          PY
+
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add impacts/data/
+          git commit -m "impacts data refresh $(date -u '+%Y-%m-%d')"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

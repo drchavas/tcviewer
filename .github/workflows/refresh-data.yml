@@ -1,13 +1,15 @@
-# Daily IBTrACS refresh for tcviewer.org.
+# IBTrACS + NHC operational refresh for tcviewer.org (every 6 h).
 # Runs on GitHub's servers: downloads the latest global IBTrACS CSV (not stored in the
-# repo), rebuilds data/*.json with process_storms.py, and commits data/ ONLY if storm data
+# repo), rebuilds data/*.json with process_storms.py, tops up recent Atlantic/E-Pacific storms
+# with NHC's operational best track (merge_operational.py — IBTrACS itself lags by up to a
+# week), and commits data/ ONLY if storm data
 # actually changed (the "built" timestamp alone doesn't count). GitHub Pages then redeploys.
 # Can also be run by hand: repo → Actions → "Refresh IBTrACS data" → Run workflow.
 name: Refresh IBTrACS data
 
 on:
   schedule:
-    - cron: "17 10 * * *"     # daily, 10:17 UTC (~6:17 am Eastern)
+    - cron: "17 3,9,15,21 * * *"   # every 6 h, ~3 h after each synoptic time (when NHC posts its best track)
   workflow_dispatch:
 
 permissions:
@@ -23,14 +25,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Download IBTrACS and rebuild data/
         run: python3 process_storms.py --update
+
+      - name: Add NHC operational best track for recent storms
+        run: python3 merge_operational.py
 
       - name: Check whether storm data changed
         id: diff

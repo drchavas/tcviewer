@@ -259,7 +259,12 @@ window.__initViewer = function(){
   const DATA = window.STORMS;                 // index: { meta, clim, storms:[lightweight] }
   const F = DATA.meta.fields;                 // field index legend
   const ix = {}; F.forEach((k,i)=>ix[k]=i);   // name -> array index
-  { const lu=document.getElementById('lastUpd'); if(lu && DATA.meta.built) lu.textContent=DATA.meta.built; }
+  { const lu=document.getElementById('lastUpd');
+    if(lu && DATA.meta.built){
+      let t='IBTrACS '+DATA.meta.built;
+      const op=DATA.meta.op_through;       // NHC operational best track (merge_operational.py)
+      if(op) t+=' · NHC operational best track through '+op.slice(0,4)+'-'+op.slice(4,6)+'-'+op.slice(6,8)+' '+op.slice(8,10)+'Z';
+      lu.textContent=t; } }
 
   // per-basin track data, loaded on demand and cached (revisiting a basin = instant)
   const basinCache = {};   // basin -> Promise<{ sid: [points...] }>

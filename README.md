@@ -40,6 +40,19 @@ the three history modes to explain the ringed positions.
 - `impacts/`, `build_impacts.py` — the Storm Hazards & Impacts page and its data builder (see below).
 - `CNAME` — custom domain for GitHub Pages.
 
+## Operational (near-real-time) data
+NOAA updates IBTrACS only every few days to a week (e.g. files dated Thu 8 Oct 2026 09 UTC ended Isaias
+at 8 Oct 00Z, before its landfall). `merge_operational.py` (stdlib only) tops up data/ with NHC's
+operational best track ("b-deck", https://ftp.nhc.noaa.gov/atcf/btk/, updated every 6 h) for this year's
+Atlantic / E & C Pacific storms whose b-deck changed in the last 21 days: it appends b-deck times after
+each storm's last IBTrACS point (IBTrACS stays the reference where it exists), adds storms IBTrACS doesn't
+have yet (provisional SID built IBTrACS-style from the first point), and records `op` / `n_ibtracs` per
+storm and `meta.op_through`, shown in the header stamp. Re-running is safe (it truncates back to the
+IBTrACS points first). Not merged: landfall flags (`lf`) and distance-to-land (`d2l`), which b-decks
+don't carry; JTWC basins (W Pacific, Indian Ocean, S Hemisphere) stay at IBTrACS's pace.
+The GitHub Action `.github/workflows/refresh-data.yml` now runs **every 6 h** (03/09/15/21:17 UTC):
+IBTrACS download + rebuild, then `merge_operational.py`, committing only if storm data changed.
+
 ## Update the data
 ```
 python3 process_storms.py --update    # download latest IBTrACS + rebuild data/*.json
@@ -143,9 +156,9 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
 - **Main page link**: `../?sid=<IBTrACS SID>` opens that storm in the track explorer (added to index.html).
 
 ### Rebuilding the data: `python3 build_impacts.py`
-Needs `shapely` (≥2), `numpy`, `pandas`, `openpyxl`, `tifffile` (`pip install shapely tifffile openpyxl`).
+Needs `shapely` (≥2), `numpy`, `pandas`, `openpyxl`, `tifffile`, `imagecodecs` (`pip install shapely tifffile imagecodecs openpyxl`).
 Downloads are cached in `.impacts_cache/` (git-ignored; ~1.3 GB, mostly PRISM). First run ~10 min, then ~3 min.
-`--only helene-2024 …` rebuilds selected storms; `--skip-rain` skips PRISM. Not part of the daily Action yet.
+`--only helene-2024 …` rebuilds selected storms; `--skip-rain` skips PRISM. Rebuilt automatically on the 3rd of each month by `.github/workflows/refresh-impacts.yml` (download cache kept between runs; commits only if storm data changed); run it by hand from the Actions tab after a big storm.
 | Layer | Source | How it's tied to the storm |
 |---|---|---|
 | Wind | IBTrACS radii in `data/basin_{NA,EP}.json` | port of the viewer's `footprint()`/`swathPolys()` in shapely; county = any part inside (fractions stored) |
