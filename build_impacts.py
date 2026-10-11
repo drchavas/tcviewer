@@ -561,6 +561,7 @@ def se_summarise(rows, C):
 # ----------------------------------------------------------------------------------------------
 HWM_MAX_FT = 40      # deepest plausible flood above ground; larger values are data-entry errors
 SURGE_MAX_FT = 32    # highest plausible storm-tide water level (NAVD88); Katrina's U.S. record is ~28 ft
+SURGE_GROUND_MAX_FT = 20   # a still-water "coastal" mark on ground higher than this is rain/river flooding, not surge
 
 
 def stn_events():
@@ -599,8 +600,9 @@ def stn_stage(s, C, ev):
         if el is not None and "NAVD" not in (h.get("verticalDatumName") or ""):
             el = None                                  # only compare elevations on one datum
             pts[-1][3] = None
-        if env == "c" and el is not None and el > SURGE_MAX_FT:
-            env = "r"; pts[-1][4] = "r"                # labelled coastal but far above any surge (e.g. Harvey's Houston reservoirs)
+        if env == "c" and el is not None and (el > SURGE_MAX_FT or (not wave and hag is not None and el - hag > SURGE_GROUND_MAX_FT)):
+            env = "r"; pts[-1][4] = "r"; pts[-1][8] = 0   # labelled coastal but not surge: far above any surge (Harvey's Houston
+                                                          # reservoirs, 109 ft) or still water on high ground (Harvey's Austwell, 30 ft)
         if g and (hag is not None or el is not None):
             c = cty.setdefault(g, {"hc": None, "hr": None, "ec": None, "er": None, "n": 0, "ecw": None})
             for k, v in (("h" + env, hag), ("e" + env + ("w" if wave and env == "c" else ""), el)):
