@@ -31,7 +31,11 @@
   .picker{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   input,select,button{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
   select{cursor:pointer}
-  #q{width:230px}
+  #q{width:210px}
+  .pk{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .pk select{text-transform:none;letter-spacing:0}
+  #yearSel{min-width:76px}
+  #stormSel{min-width:130px}
   button{cursor:pointer}
   button:hover,select:hover{border-color:#3d526a}
   .notables{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 0}
@@ -161,8 +165,10 @@
     body{font-size:14px}
     .wrap{padding:0 12px}
     .picker{margin-left:0;width:100%}
-    #q{flex:1 1 160px;width:auto}
-    #stormSel{flex:1 1 160px;min-width:0}
+    .picker{display:grid;grid-template-columns:1.25fr .8fr 1.2fr;gap:6px 8px}
+    #q{grid-column:1 / -1;width:auto}
+    .pk{flex-direction:column;align-items:stretch;gap:2px;font-size:10.5px;min-width:0}
+    .pk select{width:100%;min-width:0;padding:6px 6px}
     #stormHead h2{font-size:24px}
     #stormHead .lfline{font-size:15px}
     .tiles{grid-template-columns:1fr}
@@ -187,7 +193,9 @@
     <div class="picker">
       <input id="q" type="search" list="qlist" placeholder="Find a storm, e.g. Helene 2024" autocomplete="off">
       <datalist id="qlist"></datalist>
-      <select id="stormSel" aria-label="Storm"></select>
+      <label class="pk">Basin <select id="basinSel"></select></label>
+      <label class="pk">Year <select id="yearSel"></select></label>
+      <label class="pk">Storm <select id="stormSel"></select></label>
     </div>
   </div>
 </header>
@@ -229,9 +237,12 @@
       <li><b>Rain</b> — storm-period totals from <a href="https://prism.oregonstate.edu">PRISM</a> daily 4-km precipitation
         (PRISM Group, Oregon State University), counting each day's rain only within 500 km of the storm's centre (lower 48 states only).
         Gridded values smooth out the very highest gauge readings.</li>
-      <li><b>Flooding</b> — high-water marks surveyed after the storm by the <a href="https://stn.wim.usgs.gov/stn/">USGS Short-Term Network</a>:
-        depth of water above the ground (coastal surge and inland river flooding), and water-surface elevation (feet above NAVD88, roughly sea level).
-        Only storms USGS surveyed have marks.
+      <li><b>Storm surge and inland flooding</b> — high-water marks surveyed after the storm by the <a href="https://stn.wim.usgs.gov/stn/">USGS Short-Term Network</a>,
+        split by USGS's own label for each mark. <i>Storm surge</i> uses coastal marks (open coast, bays, tidal lakes and tidal rivers, so some sit well inland)
+        and maps the highest water level: surge plus tide, in feet above NAVD88 (roughly mean sea level), which is measured at nearly every coastal mark.
+        Coastal-labelled marks with water above 32 ft are treated as inland, since no U.S. surge has come close to that (Katrina's peak was about 28 ft).
+        A county's surge level uses still-water marks; marks USGS flags as wave-affected (pushed higher by waves) are shown faded and used only where a county has nothing else.
+        <i>Inland flooding</i> uses riverine marks and maps how deep the water stood above the ground. Only storms USGS surveyed have marks.
         Peak storm surge per hurricane landfall from Klotzbach et al. (2026, <i>npj Natural Hazards</i>), using the observed surge database of Needham and Keim (2012) as updated there.</li>
       <li><b>Deaths, injuries, damage, tornadoes by county</b> — <a href="https://www.ncdc.noaa.gov/stormevents/">NCEI Storm Events Database</a>:
         reports tied to the storm (tropical-storm, hurricane and storm-surge reports near the track, plus any report whose narrative names the storm).
@@ -250,6 +261,6 @@
     <p>Built by Dan Chavas (Purdue) · <a href="../">Track &amp; wind-field explorer</a> · <span id="built"></span></p>
   </section>
 </main>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

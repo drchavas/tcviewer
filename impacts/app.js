@@ -91,6 +91,7 @@ const COL = {haz:'#5cc9d6', imp:'#ff8a7a', exp:'#a9abe6'};
 const RAMP = {
   wind: ['#7b4a8c','#b85aa8','#f08cc8'],
   rain: ['#173b4b','#165770','#1a7493','#2393b0','#3cb2c7','#69ccd6','#9de2e3','#d0f3ef'],
+  surge:['#3d7bd9','#f2d13d','#f39a2e','#e2483a','#b22a6e','#6e1f8a'],   // NHC-style: blue, yellow, orange, red, then deeper
   flood:['#1f3561','#284c8d','#3466b8','#4f86e0','#7eaaf8','#b9d1ff'],
   tor:  ['#5a3b0d','#8b5c12','#c0841b','#eda92a','#ffd57a'],
   dead: ['#5e1d1d','#8c2525','#bb3232','#e04b4b','#ff7d70','#ffb8ad'],
@@ -106,10 +107,14 @@ const LAYERS = [
   {k:'rain', short:'Rain', ticks:['1','2','4','6','8','10','15','20+'], unit:'in, storm total', grp:'Hazards', label:'Rain — storm total (highest in county)', get: c => c.r ? c.r[1] : null,
    bins:[1,2,4,6,8,10,15,20], labels:['1–2 in','2–4 in','4–6 in','6–8 in','8–10 in','10–15 in','15–20 in','20+ in'], ramp:RAMP.rain,
    note:'PRISM 4-km daily precipitation over the storm’s path (lower 48 states only).', needs:'rain'},
-  {k:'flood', short:'Flooding', ticks:['<1','1','3','6','9','12+'], unit:'ft above ground', grp:'Hazards', label:'Flooding — high-water marks (deepest above ground)',
-   get: c => c.h ? Math.max(c.h.hc ?? -1, c.h.hr ?? -1) : null,
+  {k:'surge', short:'Storm surge', ticks:['<4','4','8','12','16','20+'], unit:'ft water level above NAVD88 (≈ sea level)', grp:'Hazards',
+   label:'Storm surge — highest coastal water level (high-water marks)', get: c => c.h ? (c.h.ec ?? null) : null,
+   bins:[-99,4,8,12,16,20], labels:['under 4 ft','4–8 ft','8–12 ft','12–16 ft','16–20 ft','20+ ft'], ramp:RAMP.surge,
+   note:'USGS coastal high-water marks (open coast, bays, tidal lakes and rivers): highest water level — surge plus tide — in feet above NAVD88, roughly mean sea level. ★ = peak observed surge for the landfall.', needs:'hwmc'},
+  {k:'flood', short:'Inland flooding', ticks:['<1','1','3','6','9','12+'], unit:'ft above ground', grp:'Hazards', label:'Inland flooding — deepest water above ground (river and rain high-water marks)',
+   get: c => c.h ? (c.h.hr ?? null) : null,
    bins:[0.01,1,3,6,9,12], labels:['under 1 ft','1–3 ft','3–6 ft','6–9 ft','9–12 ft','12+ ft'], ramp:RAMP.flood,
-   note:'USGS-surveyed high-water marks; dots show each mark (coastal surge and river flooding).', needs:'hwm'},
+   note:'USGS riverine high-water marks: how deep the water stood above the ground, away from the coast.', needs:'hwmr'},
   {k:'tor', short:'Tornadoes', ticks:['1','2','3','5','10+'], unit:'per county', grp:'Hazards', label:'Tornadoes', get: c => c.se && c.se.tor ? c.se.tor : null,
    bins:[1,2,3,5,10], labels:['1','2','3–4','5–9','10+'], ramp:RAMP.tor,
    note:'Tornadoes in NCEI Storm Events tied to this storm; triangles mark where each touched down.', needs:'tor'},
@@ -225,15 +230,37 @@ let active = (params.get('layers') || params.get('layer') || 'wind').split(',').
 let opac = Math.min(1, Math.max(0.15, (+params.get('op') || 75) / 100));
 
 // ---------------------------------------------------------------- picker
-const sel = $('#stormSel'), q = $('#q');
+/* Basin → Year → Storm dropdowns, the same as the track explorer (so non-U.S. basins can slot in later). */
+const sel = $('#stormSel'), q = $('#q'), bSel = $('#basinSel'), ySel = $('#yearSel');
+const BASIN_NAMES = {NA:'North Atlantic', EP:'E/C Pacific', WP:'West Pacific',
+                     NI:'North Indian', SI:'South Indian', SP:'South Pacific', SA:'South Atlantic'};
+const basinName = b => BASIN_NAMES[b] || b || '—';
+const inBasin = (s, b) => b === 'ALL' || s.basin === b;
+function fillYears(keep){
+  const ys = [...new Set(IDX.storms.filter(s => inBasin(s, bSel.value)).map(s => s.year))].sort((a, b) => b - a);
+  ySel.innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join('');
+  ySel.value = ys.includes(keep) ? keep : ys[0];
+}
+function fillStorms(keepSlug){
+  const all = bSel.value === 'ALL';
+  const list = IDX.storms.filter(s => inBasin(s, bSel.value) && s.year === +ySel.value)
+    .sort((a, b) => a.basin === b.basin ? (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) : (a.basin < b.basin ? -1 : 1));
+  sel.innerHTML = list.map(s => `<option value="${s.slug}">${s.name && s.name !== 'UNNAMED' ? titleCase(s.name) : `Unnamed (${s.atcf || s.slug})`}${all ? ' · ' + s.basin : ''}</option>`).join('');
+  sel.value = list.some(s => s.slug === keepSlug) ? keepSlug : (list[0] || {}).slug;
+}
+function syncPicker(s){                                 // after any load (chip, search, URL): show where this storm lives
+  if(bSel.value !== 'ALL') bSel.value = s.basin;
+  fillYears(s.year); fillStorms(s.slug);
+}
 {
-  let y = null, og = null;
-  for(const s of IDX.storms){
-    if(s.year !== y){ og = document.createElement('optgroup'); og.label = s.year; sel.appendChild(og); y = s.year; }
-    const o = document.createElement('option'); o.value = s.slug;
-    o.textContent = `${s.name !== 'UNNAMED' ? titleCase(s.name) : 'Unnamed'}${s.sshs >= 1 ? ' · Cat ' + s.sshs : s.sshs === 0 ? ' · TS' : ''}`;
-    og.appendChild(o);
-  }
+  const basins = [...new Set(IDX.storms.map(s => s.basin).filter(Boolean))].sort((a, b) => basinName(a) < basinName(b) ? -1 : 1);
+  bSel.innerHTML = '<option value="ALL">All basins</option>' + basins.map(b => `<option value="${b}">${basinName(b)}</option>`).join('');
+  bSel.value = basins.includes('NA') ? 'NA' : basins[0];
+  bSel.addEventListener('change', () => {
+    fillYears(+ySel.value); fillStorms(cur && cur.slug);
+    if(sel.value && (!cur || sel.value !== cur.slug)) loadStorm(sel.value);
+  });
+  ySel.addEventListener('change', () => { fillStorms(); if(sel.value) loadStorm(sel.value); });
   const dl = $('#qlist');
   for(const s of IDX.storms){ const o = document.createElement('option'); o.value = `${titleCase(s.name)} ${s.year}`; dl.appendChild(o); }
   const pick = () => {
@@ -307,7 +334,7 @@ async function loadStorm(slug){
   S = d; cur = BYSLUG[slug]; selC = null; sortK = null;
   POPOF = c => POP[c._g] ?? null;
   for(const [g, c] of Object.entries(S.counties)) c._g = g;
-  sel.value = slug;
+  syncPicker(cur);
   document.querySelectorAll('.chip').forEach(b => b.classList.toggle('on', b.dataset.slug === slug));
   active = active.filter(k => !layerUnavailable(LBYK[k]));
   syncChips();
@@ -322,7 +349,8 @@ async function loadStorm(slug){
 function layerUnavailable(l){
   if(!S || !l || !l.needs) return null;
   if(l.needs === 'rain' && !S.rain) return 'no data';
-  if(l.needs === 'hwm' && !(S.hwm && S.hwm.length)) return 'not surveyed';
+  if(l.needs === 'hwmc' && !(S.hwm || []).some(p => p[4] === 'c')) return S.hwm && S.hwm.length ? 'no coastal marks' : 'not surveyed';
+  if(l.needs === 'hwmr' && !(S.hwm || []).some(p => p[4] === 'r')) return S.hwm && S.hwm.length ? 'no inland marks' : 'not surveyed';
   if(l.needs === 'tor' && !(S.se && S.se.tor)) return 'none reported';
   if(l.needs === 'se' && !S.se) return 'no reports';
   if(l.needs === 'out' && !S.outage) return S.year < 2015 ? 'from 2015 on' : 'no data';
@@ -386,10 +414,13 @@ function renderTiles(){
                : tile(`${mph(cur.vmax)} <small>mph</small>`, 'Peak wind (at sea)', 'no U.S. landfall'));
   const kl = (S.landfall_table || []).filter(x => x.surge_obs != null);
   const ks = kl.reduce((a, x) => x.surge_obs > (a?.surge_obs || 0) ? x : a, null);
-  const hwmMax = (S.hwm || []).reduce((a, p) => p[2] != null && p[2] > (a?.[2] ?? -1) ? p : a, null);
+  const best = (env, i) => (S.hwm || []).reduce((a, p) => p[4] === env && p[i] != null && p[i] > (a?.[i] ?? -1e9) ? p : a, null);
+  const where = p => esc(CF[p[5]] ? cname(p[5]) : '');
+  const cMax = best('c', 3), rMax = best('r', 2);
   if(ks) H.push(tile(`${m2ft(ks.surge_obs).toFixed(0)} <small>ft</small>`, 'Highest storm surge observed', `${ks.st} · Klotzbach et al. 2026`));
-  else if(hwmMax) H.push(tile(`${hwmMax[2].toFixed(1)} <small>ft</small>`, 'Deepest flooding (high-water mark)', `above ground · ${esc(CF[hwmMax[5]] ? CF[hwmMax[5]].properties.NAME + ', ' + CF[hwmMax[5]].properties.STUSPS : '')}`));
-  else H.push(tile('No survey', 'Storm surge / flood marks', '', true));
+  else if(cMax) H.push(tile(`${cMax[3].toFixed(1)} <small>ft</small>`, 'Highest coastal water level', `above NAVD88 · ${where(cMax)}`));
+  if(rMax && rMax[2] > 0) H.push(tile(`${rMax[2].toFixed(1)} <small>ft</small>`, 'Deepest inland flooding', `above ground · ${where(rMax)}`));
+  if(!ks && !cMax && !(rMax && rMax[2] > 0)) H.push(tile('No survey', 'Storm surge / flood marks', '', true));
   const offCONUS = cur.states.some(s => ['PR','HI','VI','AK'].includes(s));
   if(S.rain) H.push(tile(`${S.rain.peak.in.toFixed(1)} <small>in</small>`, offCONUS ? 'Most rain in the lower 48' : 'Most rain (4-km grid)', rainWhere()));
   else H.push(tile('—', 'Rain', 'not available (outside lower 48)', true));
@@ -496,24 +527,28 @@ function drawLayers(){
   if(selC && CF[selC]) selLayer = L.geoJSON(CF[selC], {pane:'psel', interactive:false,
     style:{color:'#ffe14d', weight:2.6, opacity:1, fill:false}}).addTo(map);
   ptsLayer = L.layerGroup().addTo(map);
-  if(active.includes('flood')) drawHWM();
+  if(active.includes('surge') || active.includes('flood')) drawHWM();
   if(active.includes('tor')) drawTor();
   renderLegend();
 }
 function drawHWM(){
-  const l = LBYK.flood;
+  const showC = active.includes('surge'), showR = active.includes('flood');
   for(const p of S.hwm || []){
-    const [la, lo, hag, el, env, g, q, site] = p;
-    const col = hag != null ? (colorOf(Math.max(hag, 0.01), l) || l.ramp[0]) : '#9aa3ab';
-    L.circleMarker([la, lo], {pane:'ppts', radius:hag != null && hag >= 6 ? 4.5 : 3.5, color:'#0b1119', weight:0.8,
-      fillColor:col, fillOpacity:0.95})
-      .bindTooltip(`<b>${env === 'c' ? 'Coastal' : 'Riverine'} high-water mark</b><br>${esc(site)}<br>`
+    const [la, lo, hag, el, env, g, q, site, wave] = p;
+    if(env === 'c' ? !showC : !showR) continue;
+    // coastal marks are coloured by water level (surge + tide); inland marks by depth above ground
+    const v = env === 'c' ? el : hag, l = env === 'c' ? LBYK.surge : LBYK.flood;
+    const col = v != null ? (colorOf(env === 'c' ? v : Math.max(v, 0.01), l) || l.ramp[0]) : '#9aa3ab';
+    L.circleMarker([la, lo], {pane:'ppts', radius:v != null && v >= (env === 'c' ? 12 : 6) ? 4.5 : 3.5, color:'#0b1119', weight:0.8,
+      fillColor:col, fillOpacity:wave ? 0.55 : 0.95, dashArray:wave ? '2 2' : null})
+      .bindTooltip(`<b>${env === 'c' ? 'Coastal (storm surge)' : 'Inland (river)'} high-water mark</b><br>${esc(site)}<br>`
         + (hag != null ? `${hag.toFixed(1)} ft above ground<br>` : '')
         + (el != null ? `water ${el.toFixed(1)} ft above NAVD88<br>` : '')
+        + (wave ? '<span style="color:var(--muted)">wave-affected (pushed up by waves, not still water)</span><br>' : '')
         + `<span style="color:var(--muted)">quality: ${esc(q || '—')}</span>`, {className:'tt'})
       .addTo(ptsLayer);
   }
-  for(const x of S.landfall_table || []){
+  for(const x of showC ? S.landfall_table || [] : []){
     if(x.surge_obs == null || x.surge_obs_ll[0] == null) continue;
     L.marker([x.surge_obs_ll[0], x.surge_obs_ll[1]], {pane:'ppts', icon:L.divIcon({className:'', iconSize:[18,18], iconAnchor:[9,9],
       html:'<svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1.5 L11.2 6.6 L16.7 7.1 L12.5 10.7 L13.8 16.1 L9 13.2 L4.2 16.1 L5.5 10.7 L1.3 7.1 L6.8 6.6 Z" fill="#ffe14d" stroke="#0b1119" stroke-width="1.2"/></svg>'})})
@@ -534,7 +569,8 @@ function drawTor(){
 }
 function legendSection(l){
   let extra = '';
-  if(l.k === 'flood') extra = '<div class="extra">Dots: each high-water mark (grey = no depth). ★ peak surge.</div>';
+  if(l.k === 'surge') extra = '<div class="extra">Dots: each coastal high-water mark (faded = wave-affected; grey = no water level). ★ peak observed surge.</div>';
+  if(l.k === 'flood') extra = '<div class="extra">Dots: each inland high-water mark (grey = depth not measured).</div>';
   if(l.k === 'tor') extra = '<div class="extra">▲ touchdown, shaded by EF rating</div>';
   return `<div class="lsec"><div class="lt">${esc(l.short)} <span>${esc(l.unit || '')}</span></div><div class="lramp">`
     + l.ramp.map((c, i) => `<span><i style="background:${c}"></i><em>${l.ramp.length > 8 && i % 2 ? '&nbsp;' : l.ticks[i]}</em></span>`).join('') + `</div>${extra}</div>`;
@@ -560,7 +596,8 @@ function layerLine(k, c, g){
   const l = LBYK[k];
   if(k === 'wind') return c.w ? `Wind: ${windTxt(c.w)}` : '';
   if(k === 'rain') return c.r ? `Rain: ${c.r[1].toFixed(1)} in (county average ${c.r[0].toFixed(1)} in)` : '';
-  if(k === 'flood') return c.h ? `Flooding: ${fl(c.h)}` : '';
+  if(k === 'surge') return c.h && c.h.ec != null ? `Storm surge: water ${c.h.ec.toFixed(1)} ft above NAVD88${c.h.hc != null ? `, up to ${c.h.hc.toFixed(1)} ft deep over land` : ''}` : '';
+  if(k === 'flood') return c.h && c.h.hr != null ? `Inland flooding: up to ${c.h.hr.toFixed(1)} ft above ground` : '';
   if(k === 'tor') return c.se && c.se.tor ? `${plural(c.se.tor, 'tornado', 'tornadoes')}${c.se.ef >= 0 ? ', strongest EF' + c.se.ef : ''}` : '';
   if(k === 'dead') return c.se && (c.se.dd + c.se.di) ? `Deaths: ${deaths(c.se.dd)} direct, ${deaths(c.se.di)} indirect` : '';
   if(k === 'inj') return c.se && (c.se.id + c.se.ii) ? `Injuries: ${deaths(c.se.id + c.se.ii)}` : '';
@@ -581,11 +618,6 @@ function outTxt(o){
   const pc = o.pct != null ? `${Math.round(o.pct * 100)}% of customers (${people(o.pk, true)})` : `${people(o.pk, true)} customers`;
   const r = o.rest != null ? `, back under 10% of that after ${days(o.rest)}` : o.cens != null ? `, still above 10% after ${days(o.cens)}` : '';
   return pc + r;
-}
-function fl(h){
-  const a = [];
-  if(h.hc != null) a.push(`coastal ${h.hc.toFixed(1)} ft`); if(h.hr != null) a.push(`inland ${h.hr.toFixed(1)} ft`);
-  return a.length ? `deepest water above ground: ${a.join(', ')}` : (h.ec != null || h.er != null ? 'marks surveyed (no depth above ground)' : '');
 }
 function zoomTo(g){
   const f = CF[g]; if(f) map.fitBounds(L.geoJSON(f).getBounds().pad(1.2), {maxZoom:9});
@@ -613,10 +645,9 @@ function renderCard(g){
   if(c.r) h.push(row('Rain, storm total', `${c.r[1].toFixed(1)} in max · ${c.r[0].toFixed(1)} in average`));
   else if(S.rain) h.push(row('Rain, storm total', 'under 0.5 in'));
   if(c.h){
-    if(c.h.hc != null) h.push(row('Coastal flooding', `${c.h.hc.toFixed(1)} ft above ground`));
-    if(c.h.hr != null) h.push(row('Inland flooding', `${c.h.hr.toFixed(1)} ft above ground`));
-    if(c.h.ec != null) h.push(row('Highest coastal water level', `${c.h.ec.toFixed(1)} ft above NAVD88`));
-    if(c.h.er != null && c.h.hr == null) h.push(row('Highest inland water level', `${c.h.er.toFixed(1)} ft above NAVD88`));
+    if(c.h.ec != null) h.push(row('Storm surge: highest water level', `${c.h.ec.toFixed(1)} ft above NAVD88 (≈ sea level)${c.h.ew ? ', wave-affected marks only' : ''}`));
+    if(c.h.hc != null) h.push(row('Storm surge: deepest over land', `${c.h.hc.toFixed(1)} ft above ground`));
+    if(c.h.hr != null) h.push(row('Inland flooding: deepest', `${c.h.hr.toFixed(1)} ft above ground`));
     h.push(row('High-water marks surveyed', c.h.n));
   }
   if(c.se && c.se.tor) h.push(row('Tornadoes', `${c.se.tor}${c.se.ef >= 0 ? ' (strongest EF' + c.se.ef + ')' : ''}`));
@@ -732,7 +763,8 @@ function renderSummary(){
       a.map(([g, v]) => `<button data-g="${g}"><span>${esc(cname(g))}</span><b>${fmt(v)}</b></button>`).join('') + '</div>';
   };
   h.push(top({t:'Most rain', c:COL.haz}, c => c.r ? c.r[1] : null, v => v.toFixed(1) + ' in'));
-  h.push(top({t:'Deepest flooding (above ground)', c:COL.haz}, c => c.h ? Math.max(c.h.hc ?? -1, c.h.hr ?? -1) : null, v => v.toFixed(1) + ' ft'));
+  h.push(top({t:'Highest storm surge (water level above NAVD88)', c:COL.haz}, c => c.h ? c.h.ec : null, v => v.toFixed(1) + ' ft'));
+  h.push(top({t:'Deepest inland flooding (above ground)', c:COL.haz}, c => c.h ? c.h.hr : null, v => v.toFixed(1) + ' ft'));
   h.push(top({t:'Most deaths (Storm Events)', c:COL.imp}, c => c.se ? c.se.dd + c.se.di : null, v => deaths(v)));
   h.push(top({t:'Most damage (Storm Events)', c:COL.imp}, c => c.se ? c.se.pd + c.se.cd : null, v => money(v, true)));
   h.push(top({t:'Most customers without power', c:COL.imp}, c => c.o ? c.o.pk : null, v => people(v, true)));
@@ -750,7 +782,8 @@ const COLS = [
   {k:'wind', t:'Wind', grp:'Hazards', get:(g, c) => c.w ? (c.w[2] > 0 ? 3 : c.w[1] > 0 ? 2 : c.w[0] > 0 ? 1 : 0) : 0,
    fmt:(v, g, c) => v === 3 ? '74+ mph' : v === 2 ? '58+ mph' : v === 1 ? '39+ mph' : '—'},
   {k:'rain', t:'Rain (in)', grp:'Hazards', get:(g, c) => c.r ? c.r[1] : null, fmt:v => v == null ? '—' : v.toFixed(1)},
-  {k:'flood', t:'Flood (ft)', grp:'Hazards', get:(g, c) => c.h ? Math.max(c.h.hc ?? -1, c.h.hr ?? -1) : null, fmt:v => v == null || v < 0 ? '—' : v < 0.05 ? '<0.1' : v.toFixed(1)},
+  {k:'surge', t:'Surge (ft)', grp:'Hazards', get:(g, c) => c.h ? c.h.ec : null, fmt:v => v == null ? '—' : v.toFixed(1)},
+  {k:'flood', t:'Inland flood (ft)', grp:'Hazards', get:(g, c) => c.h ? c.h.hr : null, fmt:v => v == null || v < 0 ? '—' : v < 0.05 ? '<0.1' : v.toFixed(1)},
   {k:'tor', t:'Tornadoes', grp:'Hazards', get:(g, c) => c.se ? c.se.tor : null, fmt:v => v ? v : '—'},
   {k:'dead', t:'Deaths', grp:'Impacts', get:(g, c) => c.se ? c.se.dd + c.se.di : null, fmt:v => v ? deaths(v) : '—'},
   {k:'inj', t:'Injuries', grp:'Impacts', get:(g, c) => c.se ? c.se.id + c.se.ii : null, fmt:v => v ? deaths(v) : '—'},
@@ -758,7 +791,7 @@ const COLS = [
   {k:'dmg', t:'Damage', grp:'Impacts', get:(g, c) => c.se ? c.se.pd + c.se.cd : null, fmt:v => v ? money(v, true) : '—'},
   {k:'pop', t:'Population', grp:'Exposure', get:g => POP[g] ?? null, fmt:v => v == null ? '—' : people(v, true)},
 ];
-const L2C = {wind:'wind', rain:'rain', flood:'flood', tor:'tor', dead:'dead', inj:'inj', out:'out', dmg:'dmg', pop:'pop'};
+const L2C = {wind:'wind', rain:'rain', surge:'surge', flood:'flood', tor:'tor', dead:'dead', inj:'inj', out:'out', dmg:'dmg', pop:'pop'};
 $('#tfilter').addEventListener('input', renderTable);
 function renderTable(){
   if(!S) return;
@@ -776,7 +809,7 @@ function renderTable(){
   });
   const MAX = 400;
   $('#tcount').textContent = `${rows.length} counties with data` + (rows.length > MAX ? ` · showing top ${MAX}` : '');
-  const grp = `<tr><th class="grp"></th><th class="grp" colspan="4" style="color:${COL.haz}">Hazards</th><th class="grp" colspan="4" style="color:${COL.imp}">Impacts</th><th class="grp" style="color:${COL.exp}">Exposure</th></tr>`;
+  const grp = `<tr><th class="grp"></th><th class="grp" colspan="5" style="color:${COL.haz}">Hazards</th><th class="grp" colspan="4" style="color:${COL.imp}">Impacts</th><th class="grp" style="color:${COL.exp}">Exposure</th></tr>`;
   const head = '<tr>' + COLS.map(c => `<th data-k="${c.k}" class="${c.k === sk ? 'sorted' : ''}">${c.t}${c.k === sk ? (sortDir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('') + '</tr>';
   const body = rows.slice(0, MAX).map(r => `<tr data-g="${r.g}" class="${r.g === selC ? 'sel' : ''}">` +
     COLS.map((c, i) => { const s = c.fmt(r.v[i], r.g, r.c); return `<td class="${s === '—' ? 'z' : ''}">${s}</td>`; }).join('') + '</tr>').join('');

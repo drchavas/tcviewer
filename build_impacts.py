@@ -560,6 +560,7 @@ def se_summarise(rows, C):
 # USGS STN high-water marks (flood height above ground, coastal & riverine)
 # ----------------------------------------------------------------------------------------------
 HWM_MAX_FT = 40      # deepest plausible flood above ground; larger values are data-entry errors
+SURGE_MAX_FT = 32    # highest plausible storm-tide water level (NAVD88); Katrina's U.S. record is ~28 ft
 
 
 def stn_events():
@@ -592,17 +593,24 @@ def stn_stage(s, C, ev):
         env = "c" if (h.get("hwm_environment") or "").lower().startswith("coast") else "r"
         g = C.at(lo, la, tol=0.05)
         q = (h.get("hwmQualityName") or "").split(":")[0]
+        wave = 1 if env == "c" and h.get("stillwater") == 0 else 0   # USGS flag: mark raised by waves, not still water
         pts.append([round(la, 4), round(lo, 4), None if hag is None else round(hag, 1),
-                    None if el is None else round(el, 1), env, g, q, (h.get("siteDescription") or "")[:60]])
+                    None if el is None else round(el, 1), env, g, q, (h.get("siteDescription") or "")[:60], wave])
         if el is not None and "NAVD" not in (h.get("verticalDatumName") or ""):
             el = None                                  # only compare elevations on one datum
             pts[-1][3] = None
+        if env == "c" and el is not None and el > SURGE_MAX_FT:
+            env = "r"; pts[-1][4] = "r"                # labelled coastal but far above any surge (e.g. Harvey's Houston reservoirs)
         if g and (hag is not None or el is not None):
-            c = cty.setdefault(g, {"hc": None, "hr": None, "ec": None, "er": None, "n": 0})
-            for k, v in (("h" + env, hag), ("e" + env, el)):
+            c = cty.setdefault(g, {"hc": None, "hr": None, "ec": None, "er": None, "n": 0, "ecw": None})
+            for k, v in (("h" + env, hag), ("e" + env + ("w" if wave and env == "c" else ""), el)):
                 if v is not None:
                     c[k] = v if c[k] is None else max(c[k], v)
             c["n"] += 1
+    for c in cty.values():                             # surge level: still-water marks; wave-affected only if a county has nothing else
+        w = c.pop("ecw")
+        if c["ec"] is None and w is not None:
+            c["ec"], c["ew"] = w, 1
     return {"event": eid, "pts": pts, "cty": cty}
 
 

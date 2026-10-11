@@ -145,7 +145,7 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
 - **Storms**: every Atlantic / East-Pacific storm since 2004 whose 34-kt wind radii touched a U.S. county
   (133 as of Oct 2026). 2004 is when wind radii became routine.
 - **Layout**: header with landfall sentence(s) in local time → Hazards / Impacts / Exposure headline tiles →
-  map with **layer chips that toggle independently and stack** (Hazards: wind, rain, flooding, tornadoes ·
+  map with **layer chips that toggle independently and stack** (Hazards: wind, rain, storm surge, inland flooding, tornadoes ·
   Impacts: deaths, injuries, damage, power outages · Exposure: population) — each newly turned-on layer draws on top (numbered
   badges), one opacity slider, stacked collapsible legend, tooltip lists every active layer — plus a one-of
   **Backdrop** set (same sources as extremewx.org's scsdash) that toggle independently and blend, over an
@@ -153,7 +153,9 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   VIIRS Black Marble 2016, native z8 — recoloured client-side by `GlowTiles` into an amber glow whose alpha
   follows brightness, so the black sky is transparent; GIBS sends CORS headers), Highways (Esri
   World_Street_Map, `mix-blend-mode: multiply`). **Default: Topography + Night lights.** A second slider sets
-  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. Map is full-width, directly
+  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. Storms are picked with
+  Basin → Year → Storm dropdowns like the track explorer (plus a search box and Notable chips), so other basins
+  can be added later without changing the picker. Map is full-width, directly
   under the layer bar; clicking a county opens a small popup card over the map's top-right corner (× or Esc
   closes it; bottom sheet on phones) → headline-number tiles → storm overview (deaths by cause, outage curve,
   damage/surge by landfall, Storm Events, top-county lists in flowing columns) → sortable county table
@@ -169,7 +171,7 @@ Downloads are cached in `.impacts_cache/` (git-ignored; ~1.3 GB, mostly PRISM). 
 |---|---|---|
 | Wind | IBTrACS radii in `data/basin_{NA,EP}.json` | port of the viewer's `footprint()`/`swathPolys()` in shapely; county = any part inside (fractions stored) |
 | Rain | PRISM daily 4-km ppt (services.nacse.org) | each PRISM day (24 h ending 12 UTC) counts only cells within 500 km of the centre from 6 h before to 30 h after that day (captures rain ahead of the storm, excludes unrelated systems). Lower 48 only |
-| Flooding | USGS STN high-water marks (`FilteredHWMs.json?Event=`) | STN hurricane events matched by "YYYY Name"; per county max height above ground (coastal/riverine) and max water elevation (NAVD88 only); marks >40 ft above ground dropped as entry errors |
+| Storm surge / inland flooding | USGS STN high-water marks (`FilteredHWMs.json?Event=`) | STN hurricane events matched by "YYYY Name". Split by USGS `hwm_environment`: **surge** = coastal marks, per-county max water level (ft above NAVD88, surge + tide) from still-water marks (wave-affected `stillwater=0` marks only if a county has nothing else); coastal marks above `SURGE_MAX_FT` = 32 ft are treated as inland (e.g. Harvey's Houston reservoir marks). **Inland flooding** = riverine marks, per-county max height above ground (>40 ft dropped). Peak observed surge per landfall (★) from Klotzbach et al. 2026. Known: some Harvey rain-flood marks near the coast are USGS-labelled coastal. |
 | Deaths, injuries, damage, tornadoes | NCEI Storm Events details files | (a) tropical-storm/hurricane/TD/storm-surge reports within 24 h of the U.S. period and 400 km of the track, or (b) any report whose narrative names the storm in a tropical context, within −48 h/+120 h and 1200 km. One storm per report (name match wins, then distance). Zone reports → counties via NWS zone–county correlation (`bp16ap26.dbx`, name fallback), split evenly. Puerto Rico's pre-2023 zones don't map, so PR reports count in totals but not on the map |
 | Direct deaths by cause/state | Muller et al. (2026) GitHub dataset | by ATCF id; lower 48, Atlantic only |
 | Normalized damage, peak surge | Klotzbach et al. (2026) supp. table (Mooney et al. 2026 damage) | by ATCF id; CONUS hurricane landfalls |
