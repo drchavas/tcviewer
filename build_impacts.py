@@ -1074,7 +1074,7 @@ def main():
         hwmx = max([p[2] for p in (stn["pts"] if stn else []) if p[2] is not None] or [None]) if stn else None
         hwme = max([p[3] for p in (stn["pts"] if stn else []) if p[3] is not None and p[4] == "c"] or [None]) if stn else None
         index.append({
-            "slug": s["slug"], "name": s["name"], "year": s["year"], "basin": s["basin"], "atcf": atcf,
+            "slug": s["slug"], "sid": s["sid"], "name": s["name"], "year": s["year"], "basin": s["basin"], "atcf": atcf,
             "t": rec["t"], "sshs": smax, "vmax": vmax,
             "lf": [{"st": x["st"], "sshs": x["sshs"], "vmax": x["vmax"], "t": x["t"], "cname": x["cname"]} for x in lf],
             "states": sorted({C.st[g] for g in W["counties"]}),

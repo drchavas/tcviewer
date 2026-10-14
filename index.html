@@ -68,6 +68,13 @@
   header h1{margin:0;font-size:18px;font-weight:650}
   header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1000px;line-height:1.5}
   header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  .implink{display:inline-block;margin:7px 0 2px;font-size:12.5px;color:var(--text);text-decoration:none;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;background:rgba(255,171,92,.08)}
+  .implink b{color:#ffab5c;font-weight:650}
+  .implink:hover{border-color:#ffab5c}
+  .slink{display:inline-block;margin-top:7px;font-size:12px;color:#ffab5c;text-decoration:none;font-weight:600}
+  .slink:hover{text-decoration:underline}
+  .slink[hidden]{display:none}
   #app{display:flex;flex:1 1 auto;min-height:0}
   #left{flex:1 1 100%;min-width:0;display:flex;flex-direction:column}
   #mapwrap{position:relative;flex:1 1 auto;min-height:0}
@@ -143,6 +150,8 @@
     header{padding:8px 12px}
     header h1{font-size:15px;line-height:1.15}
     header p{display:none}
+    .implink{font-size:11.5px;margin-top:5px}
+    .implink .long{display:none}
     .ctl{font-size:12px;padding:9px 11px}
     #controls{width:186px;top:8px;left:8px}
     #controls .row{margin:6px 0}
@@ -158,6 +167,7 @@
 <body>
 <header>
   <h1>Tropical Cyclone Track &amp; Wind-Field Explorer</h1>
+  <a class="implink" href="impacts/"><b>New: Storm Hazards &amp; Impacts</b><span class="long"> &mdash; county-by-county wind, rain, storm surge, flooding, tornadoes, deaths, damage and power outages for U.S. storms since 2004</span> &rarr;</a>
   <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is coloured by Saffir&ndash;Simpson
      category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force), <b>50&nbsp;kt</b> and <b>64&nbsp;kt</b> (hurricane-force)
      wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.
@@ -187,6 +197,7 @@
         <div class="row"><label>Storm</label><select id="stormSel"></select></div>
         <div class="stitle" id="stormTitle">&nbsp;</div>
         <div class="ssub" id="stormSub">&nbsp;</div>
+        <a class="slink" id="impLink" hidden>Hazards &amp; impacts of this storm &rarr;</a>
       </div>
       <div id="dayControls" style="display:none">
         <div class="row" style="margin-top:2px">
@@ -913,10 +924,24 @@ window.__initViewer = function(){
     document.getElementById('stormTitle').textContent = `${titleCase(storm.name)} (${storm.year})`;
     document.getElementById('stormSub').innerHTML =
       `${basinName(storm.basin)} &middot; ${pts.length} pts &middot; peak ${peak>-99? peak+' kt':'—'} (${catName})`;
+    impactsLink(storm);
 
     buildTS(pts);   // lifecycle time series below the map
     TCV.current = {storm, pts, ulon};
     document.dispatchEvent(new CustomEvent('tcv:storm', {detail:TCV.current}));
+  }
+
+  // link to the Storm Hazards & Impacts page when it covers this storm (U.S. storms since 2004)
+  let IMPACTS = null;
+  function impactsLink(storm){
+    const a = document.getElementById('impLink'); a.hidden = true;
+    impactsLink.cur = storm;
+    IMPACTS = IMPACTS || fetch('impacts/data/index.json').then(r => r.ok ? r.json() : {storms:[]})
+      .then(j => new Map((j.storms || []).filter(s => s.sid).map(s => [s.sid, s.slug]))).catch(() => new Map());
+    IMPACTS.then(m => {
+      const slug = m.get(storm.sid);
+      if(slug && impactsLink.cur === storm){ a.href = 'impacts/?storm=' + encodeURIComponent(slug); a.hidden = false; }
+    });
   }
 
   function titleCase(s){ return s.replace(/\w\S*/g, t=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()); }

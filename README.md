@@ -134,7 +134,12 @@ outlines, the summary (counties, states, population, area-weighted population) a
   former counties, which the county file uses, from Vintage 2020 scaled to CT's 2024 total).
 - Next: tcwindprofile-based peak wind & duration per county (precomputed), Storm Events impacts.
 
-## Storm Hazards & Impacts page (`impacts/`, preview)
+## Storm Hazards & Impacts page (`impacts/`, public beta since 2026-10-14)
+
+Linked from the track explorer: a pill under the main title, and a "Hazards & impacts of this storm →" link in the
+View panel shown only for storms the impacts page covers (looked up by IBTrACS SID in `impacts/data/index.json`, which
+carries `sid` for this). Also listed on extremewx.org (Tropical Cyclones → Historical Event Viewer).
+
 A separate, public-facing page (tcviewer.org/impacts/) for people who care about **impacts** rather than
 meteorology: pick a storm, see what it did to each U.S. county. Plain units (mph, inches, feet, local
 time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
