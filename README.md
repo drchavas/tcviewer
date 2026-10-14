@@ -2,7 +2,7 @@
 
 Interactive viewer for global tropical-cyclone best tracks and wind fields from NOAA
 **IBTrACS v04r01**, using the US agency for each basin (NHC in the Atlantic / E–C Pacific,
-JTWC elsewhere). Track coloured by Saffir–Simpson category, with 34/50/64-kt wind-radii swaths
+JTWC elsewhere). Track colored by Saffir–Simpson category, with 34/50/64-kt wind-radii swaths
 and Rmax; click any track point for its date, position, intensity, size, and size-percentile
 vs. that basin's climatology.
 
@@ -23,7 +23,7 @@ A top-of-panel **Mode** dropdown chooses the view; each mode hides the others' c
 Day/Month/Range default the date boxes to Helene's landfall day / month. The `Day`/`Month`/`Range`
 number boxes have wrapping steppers (month `1` ↓ → December of the previous year; day `1` ↓ → last
 day of the previous month) and are leap-aware (stepping past Feb 28 lands on Feb 29 only in a leap
-year), because each step normalises through a `Date.UTC` built with the **actual** year.
+year), because each step normalizes through a `Date.UTC` built with the **actual** year.
 
 A **"White circles = timesteps within the selected …"** hint pill appears at the top of the map in
 the three history modes to explain the ringed positions.
@@ -64,22 +64,22 @@ rebuilds `data/`. Plain `process_storms.py` reuses a local CSV if present.
 ## Data notes
 - All basins, entire record, at synoptic (6-hourly) resolution plus landfall and wind-radii
   points (interpolated 3-hourly points dropped to keep files small).
-- Wind radii (R34/R50/R64), Rmax, POCI and ROCI are routinely analysed only from ~2004 on;
+- Wind radii (R34/R50/R64), Rmax, POCI and ROCI are routinely analyzed only from ~2004 on;
   earlier storms usually lack them. The most recent season is provisional/operational.
 
 ## Rendering decisions worth not undoing
 
-These were each reached deliberately; changing one is easy to do without realising.
+These were each reached deliberately; changing one is easy to do without realizing.
 
 ### Antimeridian (180°) handling
 Raw IBTrACS longitudes near the dateline jump 179 → −179 (and `USA_LON` can even read >180, e.g.
 180.70), which made tracks and — worse — the wind-footprint polygons smear across the entire map.
 Two coordinated pieces fix it:
 - **`dest()` returns longitude continuous with its input** (no `((lon+540)%360)−180` wrap), so a
-  footprint centred near ±180 stays a small local polygon instead of one spanning ~357°.
+  footprint centered near ±180 stays a small local polygon instead of one spanning ~357°.
 - **`unwrapLons(pts)`** makes each storm's longitudes continuous (…178,179,180,181…) *and*
-  re-centres the whole track so its **median** longitude lands in [−180,180] — i.e. places the
-  storm on whichever side of the dateline holds most of it. Track, dots, labels, footprint centres
+  re-centers the whole track so its **median** longitude lands in [−180,180] — i.e. places the
+  storm on whichever side of the dateline holds most of it. Track, dots, labels, footprint centers
   and the clicked-point highlight all use these unwrapped longitudes (`curULon`). Single-storm view
   is then coherent (panned onto the wrapped map copy); the global history modes stay essentially
   within −180…180, a straddler overhanging a few degrees. Fully containing a 50/50 straddler would
@@ -124,10 +124,10 @@ ever serves them with `Content-Encoding: gzip`.
 storm on screen (Single Storm mode) it rasterises the 34/50/64 kt wind-radii swath unions — the same
 polygons the map draws, shared via `TCV.swathUnion()` and cached per storm — and every U.S. county
 onto one ~0.02° lat/lon grid, then counts cells to get the **share of each county's area** inside each
-swath. Counties are coloured by the strongest level reached (one magenta hue, brighter = stronger);
+swath. Counties are colored by the strongest level reached (one magenta hue, brighter = stronger);
 a Threshold select (34/50/64 kt) and a "counts if" rule (any part / ≥25% / ≥50% of area) drive the
 outlines, the summary (counties, states, population, area-weighted population) and the sortable list
-(click a row to zoom). Hover a coloured county for its shares and population. ~0.6–0.9 s per storm.
+(click a row to zoom). Hover a colored county for its shares and population. ~0.6–0.9 s per storm.
 - Hooks in `index.html`: `window.TCV` (`map`, `ix`, `current`, `swathUnion`, `countyTopo`, `geoReady`)
   and a `tcv:storm` event after each single-storm render (`detail:null` in the history modes).
 - `geo/county_pop.json` — Census Vintage 2024 county estimates (PR municipios from prm-est2024; CT's 8
@@ -154,11 +154,11 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   Impacts: deaths, injuries, damage, power outages · Exposure: population) — each newly turned-on layer draws on top (numbered
   badges), one opacity slider, stacked collapsible legend, tooltip lists every active layer — plus a one-of
   **Backdrop** set (same sources as extremewx.org's scsdash) that toggle independently and blend, over an
-  always-on Esri dark grey canvas: Topography (Esri World_Physical_Map, native z8), Night lights (NASA GIBS
-  VIIRS Black Marble 2016, native z8 — recoloured client-side by `GlowTiles` into an amber glow whose alpha
+  always-on Esri dark gray canvas: Topography (Esri World_Physical_Map, native z8), Night lights (NASA GIBS
+  VIIRS Black Marble 2016, native z8 — recolored client-side by `GlowTiles` into an amber glow whose alpha
   follows brightness, so the black sky is transparent; GIBS sends CORS headers), Highways (Esri
   World_Street_Map, `mix-blend-mode: multiply`). **Default: Topography + Night lights.** A second slider sets
-  backdrop strength. Light backdrops switch the track/outline/mesh colours to dark. Storms are picked with
+  backdrop strength. Light backdrops switch the track/outline/mesh colors to dark. Storms are picked with
   Basin → Year → Storm dropdowns like the track explorer (plus a search box and Notable chips), so other basins
   can be added later without changing the picker. Map is full-width, directly
   under the layer bar; clicking a county opens a small popup card over the map's top-right corner (× or Esc
@@ -184,14 +184,14 @@ so it can never block the track refresh.
 
 **Landfall for recent storms.** Official landfall comes from HURDAT `L` records, which NHC adds only with its
 post-season best track. For a storm with no `L` records and track within the last 365 days, landfall is estimated where
-the centre moves from water (IBTrACS distance-to-land > 0, or an operational point) onto a U.S. county, by bisecting the
+the center moves from water (IBTrACS distance-to-land > 0, or an operational point) onto a U.S. county, by bisecting the
 track segment; intensity is interpolated. Stored with `"est": 1`. Storms whose track ends within the last 180 days are
 flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfall sentence.
 | Layer | Source | How it's tied to the storm |
 |---|---|---|
 | Wind | IBTrACS radii in `data/basin_{NA,EP}.json` | port of the viewer's `footprint()`/`swathPolys()` in shapely; county = any part inside (fractions stored) |
-| Rain | PRISM daily 4-km ppt (services.nacse.org) | each PRISM day (24 h ending 12 UTC) counts only cells within 500 km of the centre from 6 h before to 30 h after that day (captures rain ahead of the storm, excludes unrelated systems). Lower 48 only |
-| Storm surge / inland flooding | USGS STN high-water marks (`FilteredHWMs.json?Event=`) | STN hurricane events matched by "YYYY Name". Split by USGS `hwm_environment`: **surge** = coastal marks, per-county max water level (ft above NAVD88, surge + tide) from still-water marks (wave-affected `stillwater=0` marks only if a county has nothing else); coastal marks are treated as inland if water > `SURGE_MAX_FT` = 32 ft (e.g. Harvey's Houston reservoir marks) or if a still-water mark stood on ground > `SURGE_GROUND_MAX_FT` = 20 ft (elev − height above ground; e.g. Harvey's Austwell marks). **Inland flooding** = riverine marks, per-county max height above ground (>40 ft dropped). Peak observed surge per landfall (★) from Klotzbach et al. 2026. Known: Harvey still has coastal-labelled rain-flood marks with no height above ground, so its county surge levels (15–20 ft) exceed its 9.5 ft observed peak. |
+| Rain | PRISM daily 4-km ppt (services.nacse.org) | each PRISM day (24 h ending 12 UTC) counts only cells within 500 km of the center from 6 h before to 30 h after that day (captures rain ahead of the storm, excludes unrelated systems). Lower 48 only |
+| Storm surge / inland flooding | USGS STN high-water marks (`FilteredHWMs.json?Event=`) | STN hurricane events matched by "YYYY Name". Split by USGS `hwm_environment`: **surge** = coastal marks, per-county max water level (ft above NAVD88, surge + tide) from still-water marks (wave-affected `stillwater=0` marks only if a county has nothing else); coastal marks are treated as inland if water > `SURGE_MAX_FT` = 32 ft (e.g. Harvey's Houston reservoir marks) or if a still-water mark stood on ground > `SURGE_GROUND_MAX_FT` = 20 ft (elev − height above ground; e.g. Harvey's Austwell marks). **Inland flooding** = riverine marks, per-county max height above ground (>40 ft dropped). Peak observed surge per landfall (★) from Klotzbach et al. 2026. Known: Harvey still has coastal-labeled rain-flood marks with no height above ground, so its county surge levels (15–20 ft) exceed its 9.5 ft observed peak. |
 | Deaths, injuries, damage, tornadoes | NCEI Storm Events details files | (a) tropical-storm/hurricane/TD/storm-surge reports within 24 h of the U.S. period and 400 km of the track, or (b) any report whose narrative names the storm in a tropical context, within −48 h/+120 h and 1200 km. One storm per report (name match wins, then distance). Zone reports → counties via NWS zone–county correlation (`bp16ap26.dbx`, name fallback), split evenly. Puerto Rico's pre-2023 zones don't map, so PR reports count in totals but not on the map |
 | Direct deaths by cause/state | Muller et al. (2026) GitHub dataset | by ATCF id; lower 48, Atlantic only |
 | Normalized damage, peak surge | Klotzbach et al. (2026) supp. table (Mooney et al. 2026 damage) | by ATCF id; CONUS hurricane landfalls |
@@ -203,11 +203,19 @@ Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CA
 tiles now stamp "API key required" across every tile, which is why this was swapped. **Esri tile
 URLs are `{z}/{y}/{x}` (row before column)** — using `{z}/{x}/{y}` silently serves scrambled tiles.
 
+## Feedback pop-up (`feedback.js`)
+"Send feedback" links (`data-feedback` or `href="#feedback"`) on the track explorer and impacts page open a small
+dialog (type: error / suggestion / question / other, message, optional name and email, plus the page URL, window size
+and browser sent automatically). It posts to a Google Form owned by Dan ("Site feedback: extremewx.org & tcviewer.org",
+in drchavas@gmail.com's Drive); responses land in the form's Responses tab, not an inbox. Honeypot field for bots. The
+form's `entry.*` ids are hard-coded in `feedback.js`; if a question in the form is ever deleted and re-created, update
+them. The same file is copied to extremewx.org (`assets/feedback.js`) and used on its pages.
+
 ## Deploy & hosting
 Publish with **`../deploy_tcviewer.sh`** (in `Personal Website/`, sibling of the Purdue
 `deploy.sh`/`publish.sh`): it git-adds, commits (auto message from the diff via the Claude CLI) and
 pushes this repo; `--data` first runs `process_storms.py --update`. GitHub Pages redeploys on push.
-DNS is **Cloudflare DNS-only (grey cloud), not proxied** — A `@` → the four GitHub Pages IPs
+DNS is **Cloudflare DNS-only (gray cloud), not proxied** — A `@` → the four GitHub Pages IPs
 (185.199.108–111.153) and `www` CNAME → `drchavas.github.io`; custom domain + Enforce HTTPS in the
 repo's Pages settings. Cloudflare never caches, so the only wait after a push is the Pages build.
 
@@ -218,4 +226,4 @@ plus the IBTrACS `Dataset`, attributed to Dan Chavas). `robots.txt` and `sitemap
 repo root.
 
 The header meta line shows a **"Data last updated"** stamp (from `meta.built` in `index.json`) and a
-credit to Michael Fischer's **tcatlas.org** for radar/satellite storm visualisation.
+credit to Michael Fischer's **tcatlas.org** for radar/satellite storm visualization.

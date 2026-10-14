@@ -148,7 +148,7 @@ const GCOL = {Hazards:COL.haz, Impacts:COL.imp, Exposure:COL.exp, Backdrop:'#c3c
    NASA's VIIRS Black Marble (radiance, a proxy for where people are, not a population count). */
 const PLAIN = {url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
                attr:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'};
-/* Backdrops toggle independently and are blended, not just stacked. Night lights are recoloured in the
+/* Backdrops toggle independently and are blended, not just stacked. Night lights are recolored in the
    browser into a warm glow whose transparency follows brightness (black sky → fully transparent), so
    they read over the light topography too; highways use "multiply" (white paper drops out, roads and
    labels stay). Order bottom→top: dark canvas, topography, night lights, highways. */
@@ -391,7 +391,7 @@ function renderHead(){
   if(S.prelim){
     const est = lf.some(x => x.est);
     line += `<span class="prelim"><b>Preliminary.</b> This storm is recent, so some data are still coming in: storm reports, high-water marks,
-      deaths, damage and power outages are added as agencies publish them (weeks to months)${est ? '. Landfall is estimated from where the centre crossed the coast until NHC releases its final best track' : ''}.</span>`;
+      deaths, damage and power outages are added as agencies publish them (weeks to months)${est ? '. Landfall is estimated from where the center crossed the coast until NHC releases its final best track' : ''}.</span>`;
   }
   $('#lfline').innerHTML = line;
   $('#links').innerHTML = `<a href="../?sid=${encodeURIComponent(S.sid)}">See the meteorology (track, wind radii, intensity) →</a>`
@@ -541,7 +541,7 @@ function drawHWM(){
   for(const p of S.hwm || []){
     const [la, lo, hag, el, env, g, q, site, wave] = p;
     if(env === 'c' ? !showC : !showR) continue;
-    // coastal marks are coloured by water level (surge + tide); inland marks by depth above ground
+    // coastal marks are colored by water level (surge + tide); inland marks by depth above ground
     const v = env === 'c' ? el : hag, l = env === 'c' ? LBYK.surge : LBYK.flood;
     const col = v != null ? (colorOf(env === 'c' ? v : Math.max(v, 0.01), l) || l.ramp[0]) : '#9aa3ab';
     L.circleMarker([la, lo], {pane:'ppts', radius:v != null && v >= (env === 'c' ? 12 : 6) ? 4.5 : 3.5, color:'#0b1119', weight:0.8,
@@ -558,7 +558,7 @@ function drawHWM(){
     L.marker([x.surge_obs_ll[0], x.surge_obs_ll[1]], {pane:'ppts', icon:L.divIcon({className:'', iconSize:[18,18], iconAnchor:[9,9],
       html:'<svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1.5 L11.2 6.6 L16.7 7.1 L12.5 10.7 L13.8 16.1 L9 13.2 L4.2 16.1 L5.5 10.7 L1.3 7.1 L6.8 6.6 Z" fill="#ffe14d" stroke="#0b1119" stroke-width="1.2"/></svg>'})})
       .bindTooltip(`<b>Peak observed storm surge</b><br>${m2ft(x.surge_obs).toFixed(1)} ft (${x.surge_obs} m), ${x.st}`
-        + (x.surge_mod != null ? `<br>modelled peak: ${m2ft(x.surge_mod).toFixed(1)} ft` : '') + '<br><span style="color:var(--muted)">Klotzbach et al. (2026)</span>', {className:'tt'})
+        + (x.surge_mod != null ? `<br>modeled peak: ${m2ft(x.surge_mod).toFixed(1)} ft` : '') + '<br><span style="color:var(--muted)">Klotzbach et al. (2026)</span>', {className:'tt'})
       .addTo(ptsLayer);
   }
 }
@@ -574,8 +574,8 @@ function drawTor(){
 }
 function legendSection(l){
   let extra = '';
-  if(l.k === 'surge') extra = '<div class="extra">Dots: each coastal high-water mark (faded = wave-affected; grey = no water level). ★ peak observed surge.</div>';
-  if(l.k === 'flood') extra = '<div class="extra">Dots: each inland high-water mark (grey = depth not measured).</div>';
+  if(l.k === 'surge') extra = '<div class="extra">Dots: each coastal high-water mark (faded = wave-affected; gray = no water level). ★ peak observed surge.</div>';
+  if(l.k === 'flood') extra = '<div class="extra">Dots: each inland high-water mark (gray = depth not measured).</div>';
   if(l.k === 'tor') extra = '<div class="extra">▲ touchdown, shaded by EF rating</div>';
   return `<div class="lsec"><div class="lt">${esc(l.short)} <span>${esc(l.unit || '')}</span></div><div class="lramp">`
     + l.ramp.map((c, i) => `<span><i style="background:${c}"></i><em>${l.ramp.length > 8 && i % 2 ? '&nbsp;' : l.ticks[i]}</em></span>`).join('') + `</div>${extra}</div>`;
@@ -726,7 +726,7 @@ function closeCard(){
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#card').hidden) closeCard(); });
 function renderSummary(){
   const h = [];
-  const head = `<div class="ovhead"><h3>Storm overview</h3><div class="csub">Click any coloured county on the map, or a row in the table, for that county\u2019s details.</div></div>`;
+  const head = `<div class="ovhead"><h3>Storm overview</h3><div class="csub">Click any colored county on the map, or a row in the table, for that county\u2019s details.</div></div>`;
   const F = S.fatalities;
   if(F){
     const CAUSE = {surge:'Storm surge', freshwater_floods:'Freshwater flooding', tree_fall:'Falling trees', wind:'Wind', tornado:'Tornadoes',
@@ -748,7 +748,7 @@ function renderSummary(){
     for(const x of K){
       const dd = new Date(x.date + 'T12:00:00Z').toLocaleString('en-US', {month:'short', day:'numeric', timeZone:'UTC'}).replace('Sep ', 'Sept ');
       h.push(row(`Landfall ${dd} · ${x.st}`, `${x.dmg ? money(x.dmg) : '—'}`));
-      if(x.surge_obs != null) h.push(row('&nbsp;&nbsp;peak surge', `${m2ft(x.surge_obs).toFixed(1)} ft observed` + (x.surge_mod != null ? ` · ${m2ft(x.surge_mod).toFixed(1)} ft modelled` : '')));
+      if(x.surge_obs != null) h.push(row('&nbsp;&nbsp;peak surge', `${m2ft(x.surge_obs).toFixed(1)} ft observed` + (x.surge_mod != null ? ` · ${m2ft(x.surge_mod).toFixed(1)} ft modeled` : '')));
     }
     h.push('</table><div class="note">Normalized damage: what the landfall would cost with today’s housing, in 2024 dollars (Mooney et al. 2026). Surge: Klotzbach et al. (2026).</div>');
   }

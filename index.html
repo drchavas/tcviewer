@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TC Viewer — Tropical Cyclone (Hurricane &amp; Typhoon) Track &amp; Wind-Field Explorer</title>
-<meta name="description" content="Explore every tropical cyclone — hurricanes, typhoons, cyclones — in the NOAA IBTrACS record. Map any storm's best track coloured by Saffir–Simpson category, its 34/50/64-kt wind radii, size and Rmax; or browse all storms active on a day, in a month, or across any date range, worldwide.">
+<meta name="description" content="Explore every tropical cyclone — hurricanes, typhoons, cyclones — in the NOAA IBTrACS record. Map any storm's best track colored by Saffir–Simpson category, its 34/50/64-kt wind radii, size and Rmax; or browse all storms active on a day, in a month, or across any date range, worldwide.">
 <meta name="keywords" content="tropical cyclone, hurricane, typhoon, hurricane tracker, hurricane tracks, storm tracks, IBTrACS, best track, wind radii, 34 kt wind radius, 64 kt wind radius, storm size, radius of maximum wind, Rmax, Saffir-Simpson, NHC, JTWC, hurricane map, cyclone map, historical hurricanes">
 <meta name="author" content="Dan Chavas">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
@@ -168,7 +168,7 @@
 <header>
   <h1>Tropical Cyclone Track &amp; Wind-Field Explorer</h1>
   <a class="implink" href="impacts/"><b>New: Storm Hazards &amp; Impacts</b><span class="long"> &mdash; county-by-county wind, rain, storm surge, flooding, tornadoes, deaths, damage and power outages for U.S. storms since 2004</span> &rarr;</a>
-  <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is coloured by Saffir&ndash;Simpson
+  <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is colored by Saffir&ndash;Simpson
      category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force), <b>50&nbsp;kt</b> and <b>64&nbsp;kt</b> (hurricane-force)
      wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.
      Source: NOAA IBTrACS v04r01 &mdash; <b>all global basins</b>, using the US agency for each
@@ -258,7 +258,7 @@
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
       <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="tstates" checked><span class="sw" style="height:0;border:0;border-top:1.5px solid rgba(214,224,234,.8);border-radius:0"></span> U.S. state borders</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="tcounties" checked><span class="sw" style="height:0;border:0;border-top:1px solid rgba(214,224,234,.4);border-radius:0"></span> U.S. county borders<span id="ctyHint" style="color:var(--muted);font-size:10.5px;display:none">&nbsp;(zoom in)</span></label>
-      <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analysed from ~2004 on; earlier storms often lack them.</div>
+      <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analyzed from ~2004 on; earlier storms often lack them.</div>
     </details>
     </div><!-- /#mapwrap -->
     <div id="timeseries"></div>
@@ -281,7 +281,7 @@ window.__initViewer = function(){
   const basinCache = {};   // basin -> Promise<{ sid: [points...] }>
   function ensureBasin(b){ return basinCache[b] || (basinCache[b] = window.__fetchJSON('data/basin_'+b+'.json')); }
 
-  // ---------- Saffir-Simpson colour map (matches notebook) ----------
+  // ---------- Saffir-Simpson color map (matches notebook) ----------
   const CAT = {
     "-1":{c:"#9aa3ab", l:"TD",     ll:"Tropical depression"},
     "0": {c:"#00bfff", l:"TS",     ll:"Tropical storm"},
@@ -302,22 +302,22 @@ window.__initViewer = function(){
     const la2 = Math.asin(Math.sin(la1)*Math.cos(d) + Math.cos(la1)*Math.sin(d)*Math.cos(br));
     const lo2 = lo1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(la1),
                                  Math.cos(d) - Math.sin(la1)*Math.sin(la2));
-    // Return longitude CONTINUOUS with the input (no ±180 wrap): a footprint centred near
+    // Return longitude CONTINUOUS with the input (no ±180 wrap): a footprint centered near
     // the dateline would otherwise get vertices on both sides of ±180 and the polygon would
     // span the whole world. Keeping it relative to `lon` leaves the shape local; Leaflet
     // renders lon just past ±180 correctly on the wrapped world copy.
     let d2 = lo2*180/Math.PI - lon;
-    d2 = ((d2 + 540) % 360) - 180;            // shortest angular offset from the centre
+    d2 = ((d2 + 540) % 360) - 180;            // shortest angular offset from the center
     return [la2*180/Math.PI, lon + d2];
   }
   // quadrant radii [NE,SE,SW,NW] -> smooth closed polygon. The four values are treated
-  // as the radius at each quadrant CENTRE (NE=45°, SE=135°, SW=225°, NW=315°) and the
+  // as the radius at each quadrant CENTER (NE=45°, SE=135°, SW=225°, NW=315°) and the
   // radius is interpolated continuously around the compass. This avoids the hard radial
   // steps at the 90° quadrant boundaries that otherwise stack into a sawtooth on the swath.
-  // A 0/null quadrant pulls the curve smoothly toward the storm centre.
+  // A 0/null quadrant pulls the curve smoothly toward the storm center.
   function radiusAt(b, v){          // v = [NE,SE,SW,NW] radii at 45/135/225/315
     b = ((b % 360) + 360) % 360;
-    const x = (b - 45 + 360) % 360; // 0 at NE centre
+    const x = (b - 45 + 360) % 360; // 0 at NE center
     const seg = Math.floor(x / 90), t = (x - seg*90) / 90;
     return v[seg]*(1-t) + v[(seg+1)%4]*t;
   }
@@ -327,7 +327,7 @@ window.__initViewer = function(){
     const pts = [];
     for(let b=0; b<360; b+=3){
       const r = radiusAt(b, v);
-      pts.push(r>0 ? dest(lat, lon, b, r) : [lat, lon]);   // dip to centre where zero
+      pts.push(r>0 ? dest(lat, lon, b, r) : [lat, lon]);   // dip to center where zero
     }
     return pts.length>=3 ? pts : null;
   }
@@ -337,7 +337,7 @@ window.__initViewer = function(){
     return 6371*2*Math.asin(Math.sqrt(a))/NM2KM;
   }
   function minPos(radii){ let m=Infinity; for(const v of radii){ if(v!=null && v>0 && v<m) m=v; } return m===Infinity?0:m; }
-  // Use the same wedge-to-centre footprint for the union as for the outlines/highlight,
+  // Use the same wedge-to-center footprint for the union as for the outlines/highlight,
   // so the swath boundary matches what a clicked point shows (no chord across empty quadrants).
   function ringOf(lat,lon,radii){ const f=footprint(lat,lon,radii); if(!f) return null; const r=f.map(p=>[p[1],p[0]]); r.push(r[0]); return [r]; }
   // Build the polygons for a swath: each point's footprint PLUS interpolated footprints
@@ -594,7 +594,7 @@ window.__initViewer = function(){
       if(prev!==null){ while(lon-prev>180) lon-=360; while(lon-prev<-180) lon+=360; }
       out[i]=lon; prev=lon;
     }
-    // Re-centre the (now continuous) track so its MEDIAN longitude falls in [-180,180] —
+    // Re-center the (now continuous) track so its MEDIAN longitude falls in [-180,180] —
     // i.e. put the storm on whichever side of the dateline holds most of it. This keeps the
     // single-storm view coherent (panned onto the wrapped map copy) and keeps the global
     // modes essentially within the standard -180..180 domain (only a straddler overhangs a bit).
@@ -663,7 +663,7 @@ window.__initViewer = function(){
   }
   const MON3=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   function shortDate(ep){ const d=new Date(ep); return MON3[d.getUTCMonth()]+' '+d.getUTCDate(); }
-  // Size readout doubling as a colour key: coloured R34/R64/Rmax labels, with the
+  // Size readout doubling as a color key: colored R34/R64/Rmax labels, with the
   // selected time's values appended when a point (p) is given.
   function sizeVals(p){
     const defs = [
@@ -713,7 +713,7 @@ window.__initViewer = function(){
       const mark=`<line class="tsmark" x1="-9" y1="0" x2="-9" y2="${VBH}" stroke="#ffe000" stroke-width="1.4" vector-effect="non-scaling-stroke" style="display:none"/>`;
       const svg=`<svg class="tssvg" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">${xgrid}${ygrid}${paths}${mark}</svg>`;
       const nodata = has ? '' : '<div class="tsnodata">no size data</div>';
-      const initVal = s.key==='size' ? '<span class="tsleg">'+sizeVals(null)+'</span>' : '';   // colour key until a point is picked
+      const initVal = s.key==='size' ? '<span class="tsleg">'+sizeVals(null)+'</span>' : '';   // color key until a point is picked
       html+=`<div class="tspanel${s.wide?' wide':''}" data-key="${s.key}">
         <div class="tstitle">${s.title} <span class="tsunit">${s.unit}</span><span class="tsval">${initVal}</span></div>
         <div class="tsplot">${svg}${ylabels}${nodata}</div>
@@ -745,7 +745,7 @@ window.__initViewer = function(){
       const k=pan.getAttribute('data-key');
       if(k==='vmax') el.textContent = (show && p[ix.vmax]!=null) ? ' · '+p[ix.vmax] : '';
       else if(k==='pmin') el.textContent = (show && p[ix.pmin]!=null) ? ' · '+p[ix.pmin] : '';
-      else if(k==='size') el.innerHTML = '<span class="tsleg">'+sizeVals(p)+'</span>';   // colour key, plus values when a point is picked
+      else if(k==='size') el.innerHTML = '<span class="tsleg">'+sizeVals(p)+'</span>';   // color key, plus values when a point is picked
     });
   }
   // Toggling a layer: show/hide the group; and if it was switched ON but its swaths were never
@@ -878,7 +878,7 @@ window.__initViewer = function(){
     const ulon = unwrapLons(pts); curULon = ulon;                 // dateline-safe longitudes
     const latlngs = pts.map((p,i)=>[p[ix.lat], ulon[i]]);
 
-    // coloured track segments (colour by category of segment's first point)
+    // colored track segments (color by category of segment's first point)
     for(let i=0;i<latlngs.length-1;i++){
       L.polyline([latlngs[i], latlngs[i+1]], {
         color:catColor(pts[i][ix.sshs]), weight:3, opacity:0.95
@@ -1005,7 +1005,7 @@ window.__initViewer = function(){
     rangeControls.style.display = range ? '' : 'none';
     stormControls.style.display = hist  ? 'none' : '';
     if(hist){ tsEl.style.display='none'; }   // no lifecycle strip in the history modes
-    else { viewLocked = false; }             // back to Single Storm → let it re-centre on the storm
+    else { viewLocked = false; }             // back to Single Storm → let it re-center on the storm
     // Per-mode footprint defaults: OFF for date-range (often a huge, slow selection), 34/64 kt
     // ON elsewhere. 50 kt and Rmax default off everywhere. The user can still toggle any layer after.
     t34.checked = !range; t50.checked = false; t64.checked = !range; trmw.checked = false;
@@ -1128,7 +1128,7 @@ window.__initViewer = function(){
       const trackLL=pts.map((p,i)=>[p[ix.lat],ulon[i]]);
       // wind-radii swaths for the full track (respect the legend checkboxes; skipped when heavy)
       renderSwaths(pts, ulon);
-      // full track rendered exactly like the single-storm view — coloured segments…
+      // full track rendered exactly like the single-storm view — colored segments…
       for(let i=0;i<trackLL.length-1;i++){
         L.polyline([trackLL[i],trackLL[i+1]],{color:catColor(pts[i][ix.sshs]),weight:3,opacity:0.95}).addTo(dateLayer);
       }
@@ -1173,7 +1173,7 @@ window.__initViewer = function(){
       inHi: p => p[ix.t].slice(0,6)===ym
     });
   }
-  // Normalise a (year,month,day) triple: roll month/day overflow using the ACTUAL year
+  // Normalize a (year,month,day) triple: roll month/day overflow using the ACTUAL year
   // (so Feb length, leap years and the year carry are all correct), year clamped to data.
   // Pre-clamp the year first to keep it ≥100 (avoids JS's 2-digit-year remap). Returns
   // {y,m,d} or null if any field is blank/non-numeric.
@@ -1189,7 +1189,7 @@ window.__initViewer = function(){
   // rolls over naturally (e.g. Aug 31 + one day → Sep 1); the year is clamped to the data.
   function onDateChange(){
     const a=normDate(ySel.value, mSel.value, dSel.value); if(!a) return;
-    ySel.value=a.y; mSel.value=a.m; dSel.value=a.d;                                    // reflect normalised values
+    ySel.value=a.y; mSel.value=a.m; dSel.value=a.d;                                    // reflect normalized values
     showDay(`${a.y}-${pad2(a.m)}-${pad2(a.d)}`);
   }
   [ySel,mSel,dSel].forEach(el=> el.addEventListener('change', onDateChange));

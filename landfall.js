@@ -3,12 +3,12 @@
 
    For the storm on screen it finds which U.S. counties fall inside the 34 / 50 / 64 kt
    wind-radii swaths — the same swath polygons the map draws (TCV.swathUnion) — and how much
-   of each county's area each one covers. Counties are coloured by the strongest threshold
+   of each county's area each one covers. Counties are colored by the strongest threshold
    whose swath covers at least the chosen share of the county, and listed with population.
 
    Method: the swaths and each county are rasterised onto one lat/lon grid (~2 km cells) and
    counted cell by cell, so "share of area" is an area fraction, not a centroid test. A
-   county too small to contain a cell centre is sampled at its bounding-box centre.
+   county too small to contain a cell center is sampled at its bounding-box center.
    Population: Census Vintage 2024 estimates (geo/county_pop.json). */
 (function(){
   const T = window.TCV;
@@ -53,7 +53,7 @@
   if(!compact) panel.open = true;
   panel.innerHTML = `
     <summary>County wind exposure<span class="beta">preview</span></summary>
-    <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="lfOn" checked> Colour counties on the map</label>
+    <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="lfOn" checked> Color counties on the map</label>
     <div class="lfrow"><label for="lfThr">Threshold</label><select id="lfThr">
       ${LV.map((l,i)=>`<option value="${i}"${i===2?' selected':''}>≥ ${l.long}</option>`).join('')}</select></div>
     <div class="lfrow"><label for="lfCov">Counts if</label><select id="lfCov">
@@ -64,7 +64,7 @@
     <div class="lfsum" id="lfSum"></div>
     <div class="lftbl" id="lfTbl"></div>
     <div class="note">From the 34/50/64&nbsp;kt wind-radii swaths drawn on the map (best-track radii,
-      routinely analysed from ~2004). A county is in a level when that swath covers the chosen share of
+      routinely analyzed from ~2004). A county is in a level when that swath covers the chosen share of
       its area. Population: Census 2024 estimates, i.e. today's residents, not those at the time.</div>`;
   document.getElementById('mapwrap').appendChild(panel);
   ['mousedown','wheel','dblclick','touchstart'].forEach(ev=>
@@ -96,7 +96,7 @@
   })();
 
   // ---- scanline rasteriser (even-odd, so holes work) ----
-  // grid: {x0,y1,res,W,H,a:Uint8Array}; cell (i,j) centre = (x0+(i+.5)res, y1-(j+.5)res)
+  // grid: {x0,y1,res,W,H,a:Uint8Array}; cell (i,j) center = (x0+(i+.5)res, y1-(j+.5)res)
   function spans(rings, g, dx, cb){      // cb(j, iStart, iEnd) for each covered run of cells
     let ymin=1e9,ymax=-1e9;
     for(const r of rings) for(const p of r){ if(p[1]<ymin)ymin=p[1]; if(p[1]>ymax)ymax=p[1]; }
@@ -143,7 +143,7 @@
       const n=[0,0,0,0];               // total cells, cells >=34, >=50, >=64
       for(const poly of c.polys) spans(poly, g, dx, (j,i0,i1)=>{ const o=j*W;
         for(let i=i0;i<=i1;i++){ const v=g.a[o+i]; n[0]++; if(v>=1)n[1]++; if(v>=2)n[2]++; if(v>=3)n[3]++; } });
-      if(n[0]===0){                    // county smaller than a cell: sample its bbox centre
+      if(n[0]===0){                    // county smaller than a cell: sample its bbox center
         const i=Math.floor(((c.bb[0]+c.bb[2])/2+dx-x0)/res), j=Math.floor((y1-(c.bb[1]+c.bb[3])/2)/res);
         if(i<0||j<0||i>=W||j>=H) continue;
         const v=g.a[j*W+i]; n[0]=1; if(v>=1)n[1]=1; if(v>=2)n[2]=1; if(v>=3)n[3]=1;
@@ -216,10 +216,10 @@
   map.on('mouseout', ()=>{ if(map.hasLayer(tip)) map.closeTooltip(tip); });
 
   // ---- summary + table ----
-  function summarise(){
+  function summarize(){
     if(!T.current){ elSum.innerHTML='Available in <b>Single Storm</b> mode.'; elTbl.innerHTML=''; return; }
     if(!RES){ elSum.textContent='Computing…'; elTbl.innerHTML=''; return; }
-    if(RES.noRadii){ elSum.innerHTML='This storm has no 34&nbsp;kt wind radii in the best track (routinely analysed from ~2004 on).'; elTbl.innerHTML=''; return; }
+    if(RES.noRadii){ elSum.innerHTML='This storm has no 34&nbsp;kt wind radii in the best track (routinely analyzed from ~2004 on).'; elTbl.innerHTML=''; return; }
     const thr=+elThr.value, cov=+elCov.value;
     const hit = RES.rows.filter(r=>levelOf(r,cov)>=thr);
     if(!RES.rows.length){ elSum.innerHTML='No U.S. county is inside this storm’s 34&nbsp;kt wind radii.'; elTbl.innerHTML=''; return; }
@@ -248,7 +248,7 @@
   // ---- wiring ----
   let token=0;
   async function update(cur){
-    const my=++token; RES=null; draw(); summarise();
+    const my=++token; RES=null; draw(); summarize();
     if(!cur) return;
     await ready;
     window.__loadmsg && window.__loadmsg.show('Computing county wind exposure…');
@@ -257,9 +257,9 @@
     try{ RES = compute(cur); }catch(e){ console.error('landfall compute failed', e); RES={rows:[], noRadii:false}; }
     window.__loadmsg && window.__loadmsg.hide();
     if(my!==token) return;
-    draw(); summarise();
+    draw(); summarize();
   }
   document.addEventListener('tcv:storm', e=>update(e.detail));
-  [elOn, elThr, elCov].forEach(el=>el.addEventListener('change', ()=>{ draw(); summarise(); }));
+  [elOn, elThr, elCov].forEach(el=>el.addEventListener('change', ()=>{ draw(); summarize(); }));
   update(T.current);
 })();
