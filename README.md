@@ -172,6 +172,21 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
 Needs `shapely` (≥2), `numpy`, `pandas`, `openpyxl`, `tifffile`, `imagecodecs` (`pip install shapely tifffile imagecodecs openpyxl`).
 Downloads are cached in `.impacts_cache/` (git-ignored; ~1.3 GB, mostly PRISM). First run ~10 min, then ~3 min.
 `--only helene-2024 …` rebuilds selected storms; `--skip-rain` skips PRISM. Rebuilt automatically on the 3rd of each month by `.github/workflows/refresh-impacts.yml` (download cache kept between runs; commits only if storm data changed); run it by hand from the Actions tab after a big storm.
+
+**Quick updates for recent storms (`--recent [DAYS]`, default 30).** The 6-hourly `refresh-data.yml` job, right after
+it refreshes IBTrACS and merges NHC's operational track, runs `build_impacts.py --recent 30` whenever an Atlantic or
+East-Pacific storm has track points in the last 30 days (otherwise the step is skipped). It rebuilds only those storms,
+and only the fast parts: wind footprint and counties, landfall, PRISM rain (provisional days re-downloaded at most once
+a day, since PRISM revises them) and USGS high-water marks (re-fetched). Storm Events, deaths, damage and power outages
+are kept from the last full build. Files are rewritten only if their content changed. Its small download cache
+(`impacts-quick-*`, PRISM days from the last 60 days) is separate from the monthly one. The step is `continue-on-error`,
+so it can never block the track refresh.
+
+**Landfall for recent storms.** Official landfall comes from HURDAT `L` records, which NHC adds only with its
+post-season best track. For a storm with no `L` records and track within the last 365 days, landfall is estimated where
+the centre moves from water (IBTrACS distance-to-land > 0, or an operational point) onto a U.S. county, by bisecting the
+track segment; intensity is interpolated. Stored with `"est": 1`. Storms whose track ends within the last 180 days are
+flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfall sentence.
 | Layer | Source | How it's tied to the storm |
 |---|---|---|
 | Wind | IBTrACS radii in `data/basin_{NA,EP}.json` | port of the viewer's `footprint()`/`swathPolys()` in shapely; county = any part inside (fractions stored) |

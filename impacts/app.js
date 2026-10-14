@@ -388,6 +388,11 @@ function renderHead(){
   } else {
     line = `Did not make U.S. landfall, but brought tropical-storm-force winds to ${plural(cur.n34, 'county', 'counties')} in ${listStates(cur.states)}.`;
   }
+  if(S.prelim){
+    const est = lf.some(x => x.est);
+    line += `<span class="prelim"><b>Preliminary.</b> This storm is recent, so some data are still coming in: storm reports, high-water marks,
+      deaths, damage and power outages are added as agencies publish them (weeks to months)${est ? '. Landfall is estimated from where the centre crossed the coast until NHC releases its final best track' : ''}.</span>`;
+  }
   $('#lfline').innerHTML = line;
   $('#links').innerHTML = `<a href="../?sid=${encodeURIComponent(S.sid)}">See the meteorology (track, wind radii, intensity) →</a>`
     + (S.fatalities && S.fatalities.src ? `<a href="${esc(S.fatalities.src)}" target="_blank" rel="noopener">NHC report ↗</a>` : '');

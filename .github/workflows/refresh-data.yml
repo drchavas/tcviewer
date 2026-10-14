@@ -2,8 +2,10 @@
 # Runs on GitHub's servers: downloads the latest global IBTrACS CSV (not stored in the
 # repo), rebuilds data/*.json with process_storms.py, tops up recent Atlantic/E-Pacific storms
 # with NHC's operational best track (merge_operational.py — IBTrACS itself lags by up to a
-# week), and commits data/ ONLY if storm data
-# actually changed (the "built" timestamp alone doesn't count). GitHub Pages then redeploys.
+# week), quickly updates the impacts page for storms active in the last 30 days
+# (build_impacts.py --recent: wind, landfall, rain, high-water marks), and commits data/ and
+# impacts/data/ ONLY if storm data actually changed (the "built" timestamp alone doesn't count).
+# GitHub Pages then redeploys.
 # Can also be run by hand: repo → Actions → "Refresh IBTrACS data" → Run workflow.
 name: Refresh IBTrACS data
 
@@ -37,6 +39,37 @@ jobs:
       - name: Add NHC operational best track for recent storms
         run: python3 merge_operational.py
 
+      # ---- impacts page: quick update for recent Atlantic / East-Pacific storms -------------
+      - name: Any Atlantic/East-Pacific storm in the last 30 days?
+        id: recent
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime as dt
+          cut = int((dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).strftime("%Y%m%d"))
+          idx = json.load(open("data/index.json"))
+          n = sum(1 for s in idx["storms"] if s.get("basin") in ("NA", "EP") and (s.get("t1") or 0) >= cut)
+          print("recent Atlantic/East-Pacific storms:", n)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"any={'true' if n else 'false'}\n")
+          PY
+
+      - name: Restore impacts quick-update cache (PRISM days, county grid)
+        if: steps.recent.outputs.any == 'true'
+        uses: actions/cache@v6
+        with:
+          path: .impacts_cache
+          key: impacts-quick-${{ github.run_id }}
+          restore-keys: impacts-quick-
+
+      - name: Update impacts page for recent storms
+        if: steps.recent.outputs.any == 'true'
+        continue-on-error: true          # never block the track-data refresh
+        run: |
+          pip install --quiet shapely numpy tifffile imagecodecs
+          python3 build_impacts.py --recent 30
+          # keep this cache small: drop PRISM days older than 60 days
+          python3 -c "import glob,os,datetime as d; c=(d.date.today()-d.timedelta(60)).strftime('%Y%m%d'); [os.remove(f) for f in glob.glob('.impacts_cache/prism/*.zip') if os.path.basename(f)[:8] < c]"
+
       - name: Check whether storm data changed
         id: diff
         run: |
@@ -55,7 +88,11 @@ jobs:
           ).returncode != 0
           untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "data/"],
                                      capture_output=True, text=True).stdout.strip() != ""
-          changed = index_changed or basins_changed or untracked
+          impacts_changed = subprocess.run(["git", "diff", "--quiet", "--", "impacts/data/"]).returncode != 0 or \
+              subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "impacts/data/"],
+                             capture_output=True, text=True).stdout.strip() != ""
+          print("impacts data changed:", impacts_changed)
+          changed = index_changed or basins_changed or untracked or impacts_changed
           print("storm data changed:", changed)
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"changed={'true' if changed else 'false'}\n")
@@ -66,7 +103,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/
+          git add data/ impacts/data/
           git commit -m "data refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"

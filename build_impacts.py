@@ -9,6 +9,9 @@ impacts/data/index.json (the storm list with headline numbers).
     python3 build_impacts.py                 # build everything (downloads are cached)
     python3 build_impacts.py --only helene-2024 ian-2022
     python3 build_impacts.py --skip-rain     # skip the PRISM rainfall step (slowest download)
+    python3 build_impacts.py --recent        # quick update of storms active in the last 30 days:
+                                             # wind, landfall, rain, high-water marks only (used by the
+                                             # 6-hourly refresh-data workflow); other data are kept
 
 Inputs (all public; cached under .impacts_cache/, which is git-ignored):
   wind      data/basin_NA.json, data/basin_EP.json (IBTrACS, built by process_storms.py):
@@ -54,9 +57,9 @@ def log(*a):
     print(*a, file=sys.stderr, flush=True)
 
 
-def fetch(url, dest, timeout=300, retries=3):
-    """Download url to dest (cached)."""
-    if os.path.exists(dest) and os.path.getsize(dest) > 0:
+def fetch(url, dest, timeout=300, retries=3, refresh=False):
+    """Download url to dest (cached unless refresh)."""
+    if not refresh and os.path.exists(dest) and os.path.getsize(dest) > 0:
         return dest
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     for k in range(retries):
@@ -257,7 +260,7 @@ def load_storms():
         for p in pts:
             g = lambda k: p[ix[k]] if ix[k] < len(p) else None
             P.append({"t": g("t"), "lat": g("lat"), "lon": g("lon"), "vmax": g("vmax"), "pmin": g("pmin"),
-                      "sshs": g("sshs"), "nat": g("nat"), "lf": g("lf"),
+                      "sshs": g("sshs"), "nat": g("nat"), "lf": g("lf"), "d2l": g("d2l"),
                       "r34": [g("r34ne"), g("r34se"), g("r34sw"), g("r34nw")],
                       "r50": [g("r50ne"), g("r50se"), g("r50sw"), g("r50nw")],
                       "r64": [g("r64ne"), g("r64se"), g("r64sw"), g("r64nw")]})
@@ -321,7 +324,53 @@ def wind_stage(s, C):
             if g:
                 lfs.append({"t": p["t"], "lat": p["lat"], "lon": p["lon"], "vmax": p["vmax"], "pmin": p["pmin"],
                             "sshs": p["sshs"], "county": g, "st": C.st[g], "cname": C.name[g]})
+    if not lfs and is_recent(P[-1]["t"], 365):
+        lfs = track_landfalls(P, C)     # NHC adds landfall records only with its post-season best track
     return {"u": u, "counties": counties, "t0": min(tin), "t1": max(tin), "landfalls": lfs, "P": P}
+
+
+def is_recent(t, days):
+    return tparse(t) >= dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+
+
+def sshs_of(v):
+    if v is None:
+        return None
+    return -1 if v < 34 else 0 if v < 64 else 1 if v < 83 else 2 if v < 96 else 3 if v < 113 else 4 if v < 137 else 5
+
+
+def track_landfalls(P, C):
+    """Estimated U.S. landfalls for a track without official landfall records (operational or provisional
+    best track): wherever the centre moves from water onto a U.S. county, found by bisecting the segment
+    (a centre already over land elsewhere, e.g. crossing from Mexico, is not a landfall).
+    A new crossing within 12 h of the previous one (the centre wobbling along the coast) is ignored."""
+    out, last = [], None
+    pts = [p for p in P if p["lat"] is not None and p["lon"] is not None]
+    for a, b in zip(pts, pts[1:]):
+        if a.get("d2l") == 0 or C.at(a["lon"], a["lat"]) or not C.at(b["lon"], b["lat"]):
+            continue                    # must come from water (IBTrACS distance-to-land 0 = over land, e.g. Mexico)
+        lo, hi = 0.0, 1.0
+        for _ in range(14):
+            m = (lo + hi) / 2
+            if C.at(a["lon"] + m * (b["lon"] - a["lon"]), a["lat"] + m * (b["lat"] - a["lat"])):
+                hi = m
+            else:
+                lo = m
+        la, ln = a["lat"] + hi * (b["lat"] - a["lat"]), a["lon"] + hi * (b["lon"] - a["lon"])
+        ta, tb = tparse(a["t"]), tparse(b["t"])
+        t = ta + (tb - ta) * hi
+        if last and (t - last).total_seconds() < 12 * 3600:
+            continue
+        last = t
+        mix = lambda k: None if a[k] is None or b[k] is None else a[k] + hi * (b[k] - a[k])
+        v = mix("vmax"); v = None if v is None else int(round(v / 5) * 5)
+        pm = mix("pmin"); pm = None if pm is None else int(round(pm))
+        cat = sshs_of(v) if min(a["sshs"] if a["sshs"] is not None else 0, b["sshs"] if b["sshs"] is not None else 0) > -2 else b["sshs"]
+        g = C.at(ln, la, tol=0.05)
+        if g:
+            out.append({"t": t.strftime("%Y%m%d%H%M"), "lat": round(la, 2), "lon": round(ln, 2), "vmax": v, "pmin": pm,
+                        "sshs": cat, "county": g, "st": C.st[g], "cname": C.name[g], "est": 1})
+    return out
 
 
 def geo_out(g, tol=0.02):
@@ -564,8 +613,8 @@ SURGE_MAX_FT = 32    # highest plausible storm-tide water level (NAVD88); Katrin
 SURGE_GROUND_MAX_FT = 20   # a still-water "coastal" mark on ground higher than this is rain/river flooding, not surge
 
 
-def stn_events():
-    p = fetch(STN + "Events.json", os.path.join(CACHE, "stn", "events.json"))
+def stn_events(refresh=False):
+    p = fetch(STN + "Events.json", os.path.join(CACHE, "stn", "events.json"), refresh=refresh)
     ev = {}
     for e in json.load(open(p)):
         m = re.match(r"^(\d{4})\s+([A-Za-z]+)$", (e.get("event_name") or "").strip())
@@ -574,11 +623,11 @@ def stn_events():
     return ev
 
 
-def stn_stage(s, C, ev):
+def stn_stage(s, C, ev, refresh=False):
     eid = ev.get((s["year"], s["name"]))
     if not eid:
         return None
-    p = fetch(STN + f"HWMs/FilteredHWMs.json?Event={eid}", os.path.join(CACHE, "stn", f"hwm_{eid}.json"))
+    p = fetch(STN + f"HWMs/FilteredHWMs.json?Event={eid}", os.path.join(CACHE, "stn", f"hwm_{eid}.json"), refresh=refresh)
     if not p:
         return None
     pts, cty = [], {}
@@ -704,7 +753,12 @@ def rain_days(W):
 
 
 def prism_get(ymd):
-    p = fetch(PRISM.format(ymd=ymd), os.path.join(CACHE, "prism", f"{ymd}.zip"), timeout=120)
+    dest = os.path.join(CACHE, "prism", f"{ymd}.zip")
+    # recent days are provisional and get revised: re-download them, but at most once a day
+    # (PRISM asks that each file not be downloaded more than twice in 24 h)
+    age = time.time() - os.path.getmtime(dest) if os.path.exists(dest) else 0
+    fresh = dt.datetime.strptime(ymd, "%Y%m%d").date() >= dt.date.today() - dt.timedelta(days=14)
+    p = fetch(PRISM.format(ymd=ymd), dest, timeout=120, refresh=fresh and age > 20 * 3600)
     if p and not zipfile.is_zipfile(p):          # not published yet (PRISM returns an HTML/text error)
         os.remove(p); return None
     return p
@@ -955,32 +1009,53 @@ def main():
     ap.add_argument("--only", nargs="*", help="slugs to (re)build, e.g. helene-2024")
     ap.add_argument("--skip-rain", action="store_true")
     ap.add_argument("--skip-outages", action="store_true", help="skip EAGLE-I power outages (~13 GB download)")
+    ap.add_argument("--recent", type=int, nargs="?", const=30, metavar="DAYS",
+                    help="quick update of storms whose track reaches into the last DAYS days (default 30): "
+                         "wind, landfall, rain and high-water marks; Storm Events, deaths, damage and outages are kept "
+                         "from the last full build. Writes only files whose content changed.")
     a = ap.parse_args()
+    if a.recent:
+        a.skip_outages = True
     os.makedirs(os.path.join(OUT, "storms"), exist_ok=True)
     log("counties…"); C = Counties()
     log("storms & wind swaths…")
     storms = []
-    for s in load_storms():
+    ip = os.path.join(OUT, "index.json")
+    prev = json.load(open(ip))["storms"] if os.path.exists(ip) else []
+    cands = load_storms()
+    if a.recent:
+        cands = [s for s in cands if s["pts"] and is_recent(s["pts"][-1]["t"], a.recent)]
+        log(f"  {len(cands)} Atlantic/East-Pacific storms with track in the last {a.recent} days")
+    for s in cands:
         W = wind_stage(s, C)
         if W:
             s["W"] = W; s["slug"] = slugify(s["name"], s["year"], s["sid"]); storms.append(s)
     seen = defaultdict(int)                       # unique slugs (e.g. two UNNAMED in a year)
+    by_sid = {x.get("sid"): x["slug"] for x in prev} if a.recent else {}
     for s in storms:
+        if s["sid"] in by_sid:                    # --recent: keep the slug already published
+            s["slug"] = by_sid[s["sid"]]; continue
         seen[s["slug"]] += 1
         if seen[s["slug"]] > 1:
             s["slug"] += f"-{seen[s['slug']]}"
     log(f"  {len(storms)} storms touched U.S. counties with 34-kt winds since {YEAR0}")
     todo = [s for s in storms if not a.only or s["slug"] in a.only]
 
-    log("Storm Events…"); SE = load_storm_events(C); SEM = match_storm_events(storms, SE, C)
-    log("USGS high-water marks, fatality and landfall tables…")
-    ev = stn_events(); MUL = load_muller(); KLO = load_klotzbach()
+    if not todo:
+        log("nothing to update"); return
+    if a.recent:                                  # these lag weeks to months; keep what the last full build had
+        SEM, MUL, KLO = {}, {}, {}
+        log("USGS high-water marks…"); ev = stn_events(refresh=True)
+    else:
+        log("Storm Events…"); SE = load_storm_events(C); SEM = match_storm_events(storms, SE, C)
+        log("USGS high-water marks, fatality and landfall tables…")
+        ev = stn_events(); MUL = load_muller(); KLO = load_klotzbach()
 
     if not a.skip_rain:                           # fetch PRISM days in parallel first
         from concurrent.futures import ThreadPoolExecutor
         days = sorted({d for s in todo for d in rain_days(s["W"])})
-        need = [d for d in days if not os.path.exists(os.path.join(CACHE, "prism", f"{d}.zip"))]
-        log(f"PRISM: {len(days)} days needed, {len(need)} to download…")
+        need = days                               # prism_get skips cached days (and refreshes provisional ones)
+        log(f"PRISM: {len(days)} days needed…")
         with ThreadPoolExecutor(4) as ex:
             for i, _ in enumerate(ex.map(prism_get, need)):
                 if i % 50 == 49:
@@ -1005,10 +1080,8 @@ def main():
             log(f"  power outages skipped: {e}")
     gh = {}
     index = []
-    old = {}
-    ip = os.path.join(OUT, "index.json")
-    if a.only and os.path.exists(ip):
-        old = {x["slug"]: x for x in json.load(open(ip))["storms"]}
+    old = {x["slug"]: x for x in prev} if (a.only or a.recent) else {}
+    changed = 0
     for s in storms:
         if s not in todo:
             if s["slug"] in old:
@@ -1022,7 +1095,7 @@ def main():
             se_c, se_t, tors = se_summarise(SEM[s["slug"]], C)
         for g, v in se_c.items():
             cty.setdefault(g, {})["se"] = v
-        stn = stn_stage(s, C, ev)
+        stn = stn_stage(s, C, ev, refresh=bool(a.recent))
         if stn:
             for g, v in stn["cty"].items():
                 cty.setdefault(g, {})["h"] = {k: r1(x, 1) for k, x in v.items()}
@@ -1067,12 +1140,23 @@ def main():
             "tor": tors, "rain": rain_out, "se": se_t, "fatalities": mul, "landfall_table": klo,
             "outage": outage,
         }
-        with open(os.path.join(OUT, "storms", s["slug"] + ".json"), "w") as f:
-            json.dump(clean_nan(rec), f, separators=(",", ":"), allow_nan=False)
+        rec["prelim"] = 1 if is_recent(P[-1]["t"], PRELIM_DAYS) else 0
+        sp = os.path.join(OUT, "storms", s["slug"] + ".json")
+        if a.recent and os.path.exists(sp):
+            carry_over(rec, json.load(open(sp)))
+        out = json.dumps(clean_nan(rec), separators=(",", ":"), allow_nan=False)
+        if not (os.path.exists(sp) and open(sp).read() == out):
+            with open(sp, "w") as f:
+                f.write(out)
+            changed += 1
+        # headline numbers, from the record (so carried-over pieces count too)
+        se_t, mul, klo, outage, rain = rec["se"], rec["fatalities"], rec["landfall_table"] or [], rec["outage"], rec["rain"]
+        pts = rec["hwm"]
         dmg = sum(x["dmg"] for x in klo if x.get("dmg")) or None
         surge = max([x["surge_obs"] for x in klo if x.get("surge_obs")] or [None]) if klo else None
-        hwmx = max([p[2] for p in (stn["pts"] if stn else []) if p[2] is not None] or [None]) if stn else None
-        hwme = max([p[3] for p in (stn["pts"] if stn else []) if p[3] is not None and p[4] == "c"] or [None]) if stn else None
+        hwmx = max([p[2] for p in pts if p[2] is not None] or [None]) if pts else None
+        hwme = max([p[3] for p in pts if p[3] is not None and p[4] == "c"] or [None]) if pts else None
+        index[:] = [x for x in index if x["slug"] != s["slug"]]
         index.append({
             "slug": s["slug"], "sid": s["sid"], "name": s["name"], "year": s["year"], "basin": s["basin"], "atcf": atcf,
             "t": rec["t"], "sshs": smax, "vmax": vmax,
@@ -1084,13 +1168,41 @@ def main():
             "dmg_norm": dmg, "dmg_se": (se_t["pd"] + se_t["cd"]) if se_t else None,
             "rain": rain["peak"]["in"] if rain else None, "surge_m": surge, "hwm_ft": hwmx, "hwm_elev": hwme,
             "tor": se_t["tor"] if se_t else 0,
-            "out_peak": outage["peak"]["n"] if outage else None,
+            "out_peak": outage["peak"]["n"] if outage else None, "prelim": rec["prelim"],
         })
+    if a.recent:                                  # untouched storms keep their published entries
+        mine = {x["slug"] for x in index}
+        index += [x for x in prev if x["slug"] not in mine]
     index.sort(key=lambda x: (x["t"][0]), reverse=True)
+    body = {"year0": YEAR0, "storms": index}
+    if a.recent and os.path.exists(ip):
+        o = json.load(open(ip)); o.pop("built", None)
+        if json.dumps(clean_nan(o), sort_keys=True) == json.dumps(clean_nan(body), sort_keys=True) and not changed:
+            log("no changes"); return
     with open(ip, "w") as f:
-        json.dump(clean_nan({"built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-                   "year0": YEAR0, "storms": index}), f, separators=(",", ":"), allow_nan=False)
-    log(f"wrote {len(index)} storms -> {os.path.relpath(OUT, HERE)}")
+        json.dump(clean_nan({"built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), **body}),
+                  f, separators=(",", ":"), allow_nan=False)
+    log(f"wrote {len(index)} storms ({changed} storm files changed) -> {os.path.relpath(OUT, HERE)}")
+
+
+PRELIM_DAYS = 180    # storms this recent are flagged preliminary: reports, marks, deaths, outages still coming in
+
+
+def carry_over(rec, old):
+    """--recent: keep the slow-arriving pieces from the last full build."""
+    for k in ("se", "tor", "fatalities", "landfall_table", "outage"):
+        if not rec.get(k) and old.get(k):
+            rec[k] = old[k]
+    if not rec.get("hwm") and old.get("hwm"):
+        rec["hwm"], rec["stn_event"] = old["hwm"], old.get("stn_event")
+    if not rec.get("rain") and old.get("rain"):   # e.g. a PRISM day not published yet: keep the last complete total
+        rec["rain"] = old["rain"]
+    keep = [k for k, has in (("se", True), ("o", True), ("h", rec["hwm"] is old.get("hwm")),
+                              ("r", rec["rain"] is old.get("rain"))) if has]
+    for g, v in old.get("counties", {}).items():
+        for k in keep:
+            if k in v and k not in rec["counties"].get(g, {}):
+                rec["counties"].setdefault(g, {})[k] = v[k]
 
 
 if __name__ == "__main__":
