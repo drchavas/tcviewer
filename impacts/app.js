@@ -437,8 +437,9 @@ function renderTiles(){
   else if(S.se && S.fatalities) I.push(tile(n0(S.se.dd), 'Direct deaths reported', `all areas · Storm Events · ${n0(S.fatalities.total)} in the lower 48 (Muller et al.)`));
   else if(S.se) I.push(tile(n0(S.se.dd), 'Direct deaths reported', `+ ${n0(S.se.di)} indirect · Storm Events`));
   else I.push(tile('—', 'Deaths', 'no reports', true));
-  const dn = (S.landfall_table || []).reduce((a, x) => a + (x.dmg || 0), 0);
-  if(dn) I.push(tile(money(dn, true), 'Damage, normalized to today', '2024 $ · Mooney et al. 2026'));
+  const DN = S.damage_norm;
+  if(DN && DN.total) I.push(tile(money(DN.total, true), 'Damage, normalized to today',
+    `${DN.usd} $ · ${DN.src === 'mooney' ? 'Mooney et al. 2026' : 'Klotzbach et al. 2026'}`));
   else if(S.se) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
   else I.push(tile('—', 'Damage', 'no reports', true));
   if(S.outage){
@@ -448,7 +449,7 @@ function renderTiles(){
   }
   if(S.se) I.push(tile(n0(S.se.id + S.se.ii), 'Injuries reported', 'Storm Events'));
   if(S.se && S.fatalities && !S.outage) I.push(tile(n0(S.se.dd + S.se.di), 'Deaths in county reports', `${n0(S.se.dd)} direct · ${n0(S.se.di)} indirect`));
-  else if(S.se && dn) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
+  else if(S.se && DN && DN.total) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
   t.push(group('Impacts', COL.imp, I));
   // exposure
   const E = [];
@@ -725,7 +726,7 @@ function closeCard(){
 }
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#card').hidden) closeCard(); });
 function renderSummary(){
-  const h = [];
+  const h = [], DNB = S.damage_norm;
   const head = `<div class="ovhead"><h3>Storm overview</h3><div class="csub">Click any colored county on the map, or a row in the table, for that county\u2019s details.</div></div>`;
   const F = S.fatalities;
   if(F){
@@ -739,18 +740,27 @@ function renderSummary(){
         + `<div class="bar"><i style="width:${100 * v.n / tot}%;background:${COL.imp}"></i></div>`
         + (where ? `<div class="note" style="margin-top:2px">${where}</div>` : ''));
     }
-    h.push(`<div class="note">${F.total} direct deaths in the lower 48 (Muller et al. 2026). Indirect deaths (e.g. heat, accidents, carbon monoxide) are not included.</div>`);
+    h.push(`<div class="note">${F.total} direct deaths in the lower 48 (<a href="https://www.nature.com/articles/s44304-026-00178-8" target="_blank" rel="noopener">Muller et al. 2026</a>). Indirect deaths (e.g. heat, accidents, carbon monoxide) are not included.</div>`);
   }
   if(S.outage) h.push(outageChart());
-  const K = S.landfall_table || [];
+  if(DNB && DNB.total){
+    const KIND = {landfall:'landfall', inland:'inland', indirect:'no landfall'};
+    const split = DNB.parts.length > 1 || (DNB.parts[0] && DNB.parts[0].st);
+    h.push(`<h4><i style="background:${COL.imp}"></i>Normalized damage</h4><table>`, row('<b>Storm total</b>', `<b>${money(DNB.total)}</b>`));
+    if(split)
+      for(const x of DNB.parts) h.push(row(`&nbsp;&nbsp;${esc(STN[x.st] || x.st || '—')} · ${KIND[x.kind] || x.kind}`, money(x.v)));
+    h.push(`</table><div class="note">What the storm would cost if it struck today, with today’s housing, wealth and prices, in ${DNB.usd} dollars`
+      + (DNB.src === 'mooney' ? ` (<a href="https://doi.org/10.1029/2025EA004869" target="_blank" rel="noopener">Mooney et al. 2026</a>, housing-unit method)${split ? ', split by state where the damage was reported: landfall, inland landfall, or no landfall (damage in a nearby state)' : ''}.`
+                              : ` (<a href="https://www.nature.com/articles/s44304-026-00257-w" target="_blank" rel="noopener">Klotzbach et al. 2026</a>, extending the <a href="https://doi.org/10.1029/2025EA004869" target="_blank" rel="noopener">Mooney et al. 2026</a> method to ${S.year}).`) + '</div>');
+  }
+  const K = (S.landfall_table || []).filter(x => x.surge_obs != null || x.surge_mod != null);
   if(K.length){
-    h.push(`<h4><i style="background:${COL.imp}"></i>Damage & surge by landfall</h4><table>`);
+    h.push(`<h4><i style="background:${COL.haz}"></i>Peak storm surge by landfall</h4><table>`);
     for(const x of K){
       const dd = new Date(x.date + 'T12:00:00Z').toLocaleString('en-US', {month:'short', day:'numeric', timeZone:'UTC'}).replace('Sep ', 'Sept ');
-      h.push(row(`Landfall ${dd} · ${x.st}`, `${x.dmg ? money(x.dmg) : '—'}`));
-      if(x.surge_obs != null) h.push(row('&nbsp;&nbsp;peak surge', `${m2ft(x.surge_obs).toFixed(1)} ft observed` + (x.surge_mod != null ? ` · ${m2ft(x.surge_mod).toFixed(1)} ft modeled` : '')));
+      h.push(row(`Landfall ${dd} · ${x.st}`, (x.surge_obs != null ? `${m2ft(x.surge_obs).toFixed(1)} ft observed` : '—') + (x.surge_mod != null ? ` · ${m2ft(x.surge_mod).toFixed(1)} ft modeled` : '')));
     }
-    h.push('</table><div class="note">Normalized damage: what the landfall would cost with today’s housing, in 2024 dollars (Mooney et al. 2026). Surge: Klotzbach et al. (2026).</div>');
+    h.push(`</table><div class="note">Highest storm surge measured near each hurricane landfall, and the modeled peak (<a href="https://www.nature.com/articles/s44304-026-00257-w" target="_blank" rel="noopener">Klotzbach et al. 2026</a>).</div>`);
   }
   if(S.se){
     h.push(`<h4><i style="background:${COL.imp}"></i>NCEI Storm Events reports</h4><table>`,

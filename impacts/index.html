@@ -248,14 +248,19 @@
         or when still water stood on ground more than 20 ft above sea level, which is rain or river flooding rather than surge.
         A county's surge level uses still-water marks; marks USGS flags as wave-affected (pushed higher by waves) are shown faded and used only where a county has nothing else.
         <i>Inland flooding</i> uses riverine marks and maps how deep the water stood above the ground. Only storms USGS surveyed have marks.
-        Peak storm surge per hurricane landfall from Klotzbach et al. (2026, <i>npj Natural Hazards</i>), using the observed surge database of Needham and Keim (2012) as updated there.</li>
+        Peak storm surge per hurricane landfall from <a href="https://www.nature.com/articles/s44304-026-00257-w" target="_blank" rel="noopener">Klotzbach et al. (2026)</a>, <i>npj Natural Hazards</i>, using the observed surge database of <a href="https://surge.climate.lsu.edu/data.html" target="_blank" rel="noopener">Needham and Keim (2012)</a> (SURGEDAT) as updated there.</li>
       <li><b>Deaths, injuries, damage, tornadoes by county</b> — <a href="https://www.ncdc.noaa.gov/stormevents/">NCEI Storm Events Database</a>:
         reports tied to the storm (tropical-storm, hurricane and storm-surge reports near the track, plus any report whose narrative names the storm).
         Reports filed for forecast zones are split evenly across the zone's counties. Damage is as reported at the time (not adjusted for inflation), and is incomplete.</li>
-      <li><b>Direct deaths (storm total, by cause and state)</b> — Muller et al. (2026), <i>Continental United States direct Atlantic tropical cyclone fatalities: 1963–2024</i>,
+      <li><b>Direct deaths (storm total, by cause and state)</b> — <a href="https://www.nature.com/articles/s44304-026-00178-8" target="_blank" rel="noopener">Muller et al. (2026)</a>, <i>Continental United States direct Atlantic tropical cyclone fatalities: 1963–2024</i>, <i>npj Natural Hazards</i>;
         <a href="https://github.com/DrJoMuller/CONUS-TC-Fatalities-1963-2024">dataset</a>. Atlantic storms, lower 48 states.</li>
-      <li><b>Normalized damage</b> — Mooney et al. (2026) estimate for each continental U.S. hurricane landfall: the damage the storm would cause with today's housing stock, in 2024 dollars (via Klotzbach et al. 2026).</li>
-      <li><b>Power outages</b> — <a href="https://figshare.com/articles/dataset/24237376">EAGLE-I</a> (U.S. DOE / Oak Ridge National Laboratory; Brelsford et al. 2024, <i>Scientific Data</i>):
+      <li><b>Normalized damage</b> — <a href="https://doi.org/10.1029/2025EA004869" target="_blank" rel="noopener">Mooney et al. (2026)</a>, <i>Earth and Space Science</i>
+        (<a href="https://zenodo.org/records/19175457" target="_blank" rel="noopener">dataset</a>, CC BY 4.0): what each storm would cost if it struck today,
+        in 2023 dollars, for 201 continental U.S. hurricanes and tropical storms from 1900 to 2023. It scales the damage reported at the time by inflation,
+        national wealth, and the growth in housing units in the counties within twice the radius of maximum winds (their housing-unit method, MMH23),
+        and splits it by state: landfall, inland landfall, or damage in a nearby state without landfall. Storms after 2023 use the same method from
+        <a href="https://www.nature.com/articles/s44304-026-00257-w" target="_blank" rel="noopener">Klotzbach et al. (2026)</a>, in 2024 dollars.</li>
+      <li><b>Power outages</b> — <a href="https://figshare.com/articles/dataset/24237376">EAGLE-I</a> (U.S. DOE / Oak Ridge National Laboratory; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10915145/" target="_blank" rel="noopener">Brelsford et al. 2024</a>, <i>Scientific Data</i>):
         customers without power in each county every 15 minutes, from November 2014. Peak = highest count (minus the county's routine pre-storm outages)
         while the storm was over the U.S. or within two days after; share uses EAGLE-I's modeled customer count. EAGLE-I covers most but not all utilities.</li>
       <li><b>Population</b> — U.S. Census Bureau Vintage 2024 county estimates: today's residents, not those at the time of the storm.
@@ -266,7 +271,7 @@
     <p>© 2026 <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a> (Purdue University) · <a href="../">Track &amp; wind-field explorer</a> · <a href="#feedback" data-feedback>Send feedback</a> · <span id="built"></span></p>
   </section>
 </main>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=9"></script>
 <script src="../feedback.js" defer></script>
 </body>
 </html>

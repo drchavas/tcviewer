@@ -22,7 +22,7 @@ Inputs (all public; cached under .impacts_cache/, which is git-ignored):
   outages   DOE/ORNL EAGLE-I county customers without power, every 15 min, Nov 2014 on (Figshare, CC BY 4.0)
   impacts   NCEI Storm Events (county deaths, injuries, property & crop damage, tornadoes),
             Muller et al. (2026) CONUS direct-fatality database (deaths by state & cause),
-            normalized damage per landfall (Mooney et al. 2026, via Klotzbach et al. 2026)
+            normalized damage per storm and landfall (Mooney et al. 2026, Zenodo 19175457, 2023 USD)
   people    geo/county_pop.json (Census Vintage 2024)
 """
 import argparse, datetime as dt, gzip, io, json, math, os, re, sys, time, urllib.request, zipfile
@@ -715,6 +715,57 @@ def parse_where(s, n):
     return out
 
 
+MOONEY_DIR = os.path.join(HERE, "impacts", "sources", "mooney2026")   # Zenodo 19175457, CC BY 4.0 (see SOURCE.md)
+MOONEY_KIND = {"LF": "landfall", "DIL": "inland", "ID": "indirect"}
+
+
+def load_mooney():
+    """Mooney et al. (2026) normalized damage, 2023 USD, per storm (MMH23 housing-unit method, plus MMP23 population
+    method) and per landfall part (LF direct landfall, DIL direct inland landfall, ID indirect landfall; with state)."""
+    import csv
+    agg_p = os.path.join(MOONEY_DIR, "8_aggregated_losses_2023usd.csv")
+    if not os.path.exists(agg_p):
+        log("  (Mooney et al. normalized damage not found at impacts/sources/mooney2026/ — skipping)")
+        return {}
+    num = lambda v: float(str(v).replace(",", "")) if str(v).strip() not in ("", "NA") else None
+    st = {}
+    for r in csv.reader(open(os.path.join(MOONEY_DIR, "1_base_economic_damages.csv"), encoding="utf-8-sig")):
+        if r and r[0].startswith(("AL", "EP")):
+            st[(r[0].strip(), r[3].strip())] = r[4].strip()
+    out = {}
+    for r in csv.DictReader(open(agg_p, encoding="utf-8-sig")):
+        nm = re.sub(r"^TS\s+", "", r["storm_name"].strip().upper())
+        out[r["hurdatId"].strip().upper()] = {"total": num(r["mmh23"]), "total_pop": num(r["mmp23"]), "usd": 2023,
+                                              "src": "mooney", "name": nm, "year": int(r["storm_year"]), "parts": []}
+    for r in csv.DictReader(open(os.path.join(MOONEY_DIR, "7_disaggregated_losses_2023usd.csv"), encoding="utf-8-sig")):
+        a = r["hurdatId"].strip().upper(); lid = r["full_lf_id"].strip()
+        if a in out:
+            k = re.match(r"[A-Z]+", lid).group(0)
+            out[a]["parts"].append({"id": lid, "kind": MOONEY_KIND.get(k, k), "st": st.get((a, lid)),
+                                    "v": num(r["mmh23"]), "vp": num(r["mmp23"])})
+    for v in out.values():
+        v["parts"].sort(key=lambda x: -(x["v"] or 0))
+    return out
+
+
+def damage_norm_for(MOO, atcf, name, year, klo):
+    """Normalized damage for a storm: Mooney et al. (2026) by ATCF id, checked against the storm name (their file
+    lists Idalia 2023 under Harold's id AL092023), else by name + year; storms after 2023 fall back to the
+    Klotzbach et al. (2026) table, which extends the same housing-unit method (MMH) to 2024 in 2024 dollars."""
+    m = MOO.get(atcf)
+    if m and not m["name"].startswith("STORM") and name and m["name"] != name.upper():
+        m = None
+    if not m:
+        m = next((v for v in MOO.values() if v["name"] == (name or "").upper() and v["year"] == year), None)
+    if m:
+        return {k: v for k, v in m.items() if k not in ("name", "year")}
+    parts = [{"id": f"K{i + 1}", "kind": "landfall", "st": x["st"], "v": x["dmg"]} for i, x in enumerate(klo) if x.get("dmg")]
+    if parts:
+        return {"total": sum(x["v"] for x in parts), "usd": 2024, "src": "klotzbach",
+                "parts": sorted(parts, key=lambda x: -x["v"])}
+    return None
+
+
 def load_klotzbach():
     import openpyxl
     p = os.path.join(HERE, "impacts", "sources", KLOTZBACH_XLSX)
@@ -1044,12 +1095,12 @@ def main():
     if not todo:
         log("nothing to update"); return
     if a.recent:                                  # these lag weeks to months; keep what the last full build had
-        SEM, MUL, KLO = {}, {}, {}
+        SEM, MUL, KLO, MOO = {}, {}, {}, {}
         log("USGS high-water marks…"); ev = stn_events(refresh=True)
     else:
         log("Storm Events…"); SE = load_storm_events(C); SEM = match_storm_events(storms, SE, C)
         log("USGS high-water marks, fatality and landfall tables…")
-        ev = stn_events(); MUL = load_muller(); KLO = load_klotzbach()
+        ev = stn_events(); MUL = load_muller(); KLO = load_klotzbach(); MOO = load_mooney()
 
     if not a.skip_rain:                           # fetch PRISM days in parallel first
         from concurrent.futures import ThreadPoolExecutor
@@ -1138,7 +1189,7 @@ def main():
             "landfalls": lf, "counties": cty,
             "hwm": stn["pts"] if stn else [], "stn_event": stn["event"] if stn else None,
             "tor": tors, "rain": rain_out, "se": se_t, "fatalities": mul, "landfall_table": klo,
-            "outage": outage,
+            "outage": outage, "damage_norm": damage_norm_for(MOO, atcf, s["name"], s["year"], klo),
         }
         rec["prelim"] = 1 if is_recent(P[-1]["t"], PRELIM_DAYS) else 0
         sp = os.path.join(OUT, "storms", s["slug"] + ".json")
@@ -1152,7 +1203,7 @@ def main():
         # headline numbers, from the record (so carried-over pieces count too)
         se_t, mul, klo, outage, rain = rec["se"], rec["fatalities"], rec["landfall_table"] or [], rec["outage"], rec["rain"]
         pts = rec["hwm"]
-        dmg = sum(x["dmg"] for x in klo if x.get("dmg")) or None
+        dmg = (rec["damage_norm"] or {}).get("total")     # Mooney et al. (2026), 2023 USD
         surge = max([x["surge_obs"] for x in klo if x.get("surge_obs")] or [None]) if klo else None
         hwmx = max([p[2] for p in pts if p[2] is not None] or [None]) if pts else None
         hwme = max([p[3] for p in pts if p[3] is not None and p[4] == "c"] or [None]) if pts else None
@@ -1190,7 +1241,7 @@ PRELIM_DAYS = 180    # storms this recent are flagged preliminary: reports, mark
 
 def carry_over(rec, old):
     """--recent: keep the slow-arriving pieces from the last full build."""
-    for k in ("se", "tor", "fatalities", "landfall_table", "outage"):
+    for k in ("se", "tor", "fatalities", "landfall_table", "outage", "damage_norm"):
         if not rec.get(k) and old.get(k):
             rec[k] = old[k]
     if not rec.get("hwm") and old.get("hwm"):
