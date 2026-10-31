@@ -122,7 +122,12 @@ def main():
     dry = "--dry-run" in sys.argv
     idx = json.load(open(os.path.join(HERE, "data", "index.json")))
     F = idx["meta"]["fields"]; ix = {k: i for i, k in enumerate(F)}
-    basins = {b: json.load(open(os.path.join(HERE, "data", f"basin_{b}.json"))) for b in ("NA", "EP")}
+    basins, dirty = {}, set()
+
+    def B(b):                       # basin files loaded on demand: IBTrACS can file an NHC storm under another
+        if b not in basins:         # basin (e.g. Olana CP032026 crossed the dateline and is listed as WP)
+            basins[b] = json.load(open(os.path.join(HERE, "data", f"basin_{b}.json")))
+        return basins[b]
     by_atcf = {(s.get("atcf") or "").upper(): s for s in idx["storms"] if s.get("atcf")}
     year = dt.datetime.now(dt.timezone.utc).year
     listing = get(BTK)
@@ -141,7 +146,9 @@ def main():
         basin = BASIN[fn[1:3]]
         s = by_atcf.get(atcf)
         if s:
-            pts = basins[s["basin"]][s["sid"]]
+            pts = B(s["basin"]).get(s["sid"])
+            if pts is None:
+                print(f"  {atcf}: IBTrACS storm {s['sid']} not found in basin_{s['basin']}.json, skipped"); continue
             # drop anything a previous run appended, then append b-deck times past IBTrACS
             n_ib = s.get("n_ibtracs", len(pts))
             pts = pts[:n_ib]
@@ -155,7 +162,7 @@ def main():
                     add.append(row(F, p, prev)); prev = p
             if not add and "op" not in s:
                 continue
-            basins[s["basin"]][s["sid"]] = pts + add
+            B(s["basin"])[s["sid"]] = pts + add; dirty.add(s["basin"])
             s["n_ibtracs"] = n_ib
             s["t1"] = int((add[-1][0] if add else last)[:8])
             if name and s.get("name") in (None, "", "UNNAMED", "NOT_NAMED"):
@@ -167,7 +174,7 @@ def main():
             rows = []; prev = None
             for p in P:
                 rows.append(row(F, p, prev)); prev = p
-            basins[basin][sid] = rows
+            B(basin)[sid] = rows; dirty.add(basin)
             s = {"sid": sid, "name": name or "UNNAMED", "year": int(P[0]["t"][:4]), "basin": basin, "atcf": atcf,
                  "t0": int(P[0]["t"][:8]), "t1": int(P[-1]["t"][:8]), "n_ibtracs": 0, "op": P[-1]["t"]}
             idx["storms"].append(s); by_atcf[atcf] = s
@@ -182,7 +189,8 @@ def main():
         idx["meta"]["op_through"] = op_latest
     if dry:
         print("  (dry run: nothing written)"); return
-    for b, d in basins.items():
+    for b in sorted(dirty):
+        d = basins[b]
         with open(os.path.join(HERE, "data", f"basin_{b}.json"), "w") as f:
             json.dump(d, f, separators=(",", ":"))
     with open(os.path.join(HERE, "data", "index.json"), "w") as f:
