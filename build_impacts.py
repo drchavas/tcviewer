@@ -49,7 +49,7 @@ MULLER_URL = ("https://raw.githubusercontent.com/DrJoMuller/CONUS-TC-Fatalities-
               "GitHub_CONUS%20TC%20Fatalities%201963%E2%80%932024.xlsx")
 SE_LIST = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 ZONES_URL = "https://www.weather.gov/source/gis/Shapefiles/County/bp16ap26.dbx"
-STN = "https://stn.wim.usgs.gov/STNServices/"
+STN = "https://api.waterdata.usgs.gov/stnservices/"   # moved from stn.wim.usgs.gov/STNServices (Oct 2026)
 PRISM = "https://services.nacse.org/prism/data/get/us/4km/ppt/{ymd}"
 
 
@@ -613,40 +613,71 @@ SURGE_MAX_FT = 32    # highest plausible storm-tide water level (NAVD88); Katrin
 SURGE_GROUND_MAX_FT = 20   # a still-water "coastal" mark on ground higher than this is rain/river flooding, not surge
 
 
+def load_json_list(p, what):
+    """A downloaded JSON list, or None (with a warning) if the service sent something else, e.g. an HTML page."""
+    try:
+        d = json.load(open(p)) if p else None
+    except ValueError:
+        d = None
+    if not isinstance(d, list):
+        log(f"  {what}: unexpected response, skipped" + (f" (see {p})" if p else ""))
+        if p:
+            os.replace(p, p + ".bad")              # don't keep a bad download in the cache
+        return None
+    return d
+
+
 def stn_events(refresh=False):
-    p = fetch(STN + "Events.json", os.path.join(CACHE, "stn", "events.json"), refresh=refresh)
+    """USGS STN hurricane events by (year, NAME). Accepts the new API's field names and the old ones."""
+    p = fetch(STN + "events/", os.path.join(CACHE, "stn", "events_v2.json"), refresh=refresh)
     ev = {}
-    for e in json.load(open(p)):
-        m = re.match(r"^(\d{4})\s+([A-Za-z]+)$", (e.get("event_name") or "").strip())
-        if m and e.get("event_type_id") == 2:
-            ev[(int(m.group(1)), m.group(2).upper())] = e["event_id"]
+    for e in load_json_list(p, "USGS STN events") or []:
+        m = re.match(r"^(\d{4})\s+([A-Za-z]+)$", (e.get("name") or e.get("event_name") or "").strip())
+        if m and e.get("event_type", e.get("event_type_id")) == 2:
+            ev[(int(m.group(1)), m.group(2).upper())] = e.get("id", e.get("event_id"))
     return ev
+
+
+_WAVE = None
+
+
+def stn_wave_ids():
+    """HWM ids USGS flagged wave-affected; the new STN API dropped the stillwater field, so these were saved
+    from the old API (impacts/sources/stn_wave_affected.json)."""
+    global _WAVE
+    if _WAVE is None:
+        p = os.path.join(HERE, "impacts", "sources", "stn_wave_affected.json")
+        _WAVE = set(json.load(open(p))["wave_affected_hwm_ids"]) if os.path.exists(p) else set()
+    return _WAVE
 
 
 def stn_stage(s, C, ev, refresh=False):
     eid = ev.get((s["year"], s["name"]))
     if not eid:
         return None
-    p = fetch(STN + f"HWMs/FilteredHWMs.json?Event={eid}", os.path.join(CACHE, "stn", f"hwm_{eid}.json"), refresh=refresh)
-    if not p:
+    p = fetch(STN + f"hwms/filteredhwms/?event={eid}", os.path.join(CACHE, "stn", f"hwm_v2_{eid}.json"), refresh=refresh)
+    H = load_json_list(p, f"USGS high-water marks for event {eid}")
+    if H is None:
         return None
     pts, cty = [], {}
-    for h in json.load(open(p)):
+    for h in H:
         la, lo = h.get("latitude_dd") or h.get("latitude"), h.get("longitude_dd") or h.get("longitude")
         if not (isinstance(la, (int, float)) and isinstance(lo, (int, float)) and math.isfinite(la) and math.isfinite(lo)):
             continue                                   # a few STN marks have NaN coordinates
-        hag, el = h.get("height_above_gnd"), h.get("elev_ft")
+        hag, el = h.get("height_above_ground", h.get("height_above_gnd")), h.get("elev_ft")
         if hag is not None and not (-1 <= hag <= HWM_MAX_FT):
             hag = None                                 # obvious entry errors (e.g. 152 ft above ground)
         if el is not None and not (-20 <= el <= 2000):
             el = None
-        env = "c" if (h.get("hwm_environment") or "").lower().startswith("coast") else "r"
+        env = "c" if (h.get("environment") or h.get("hwm_environment") or "").lower().startswith("coast") else "r"
         g = C.at(lo, la, tol=0.05)
-        q = (h.get("hwmQualityName") or "").split(":")[0]
-        wave = 1 if env == "c" and h.get("stillwater") == 0 else 0   # USGS flag: mark raised by waves, not still water
+        q = (h.get("hwm_quality_name") or h.get("hwmQualityName") or "").split(":")[0]
+        still = h["stillwater"] if "stillwater" in h else (0 if h.get("id", h.get("hwm_id")) in stn_wave_ids() else None)
+        wave = 1 if env == "c" and still == 0 else 0   # USGS flag: mark raised by waves, not still water
         pts.append([round(la, 4), round(lo, 4), None if hag is None else round(hag, 1),
-                    None if el is None else round(el, 1), env, g, q, (h.get("siteDescription") or "")[:60], wave])
-        if el is not None and "NAVD" not in (h.get("verticalDatumName") or ""):
+                    None if el is None else round(el, 1), env, g, q,
+                    (h.get("site_description") or h.get("siteDescription") or "")[:60], wave])
+        if el is not None and "NAVD" not in (h.get("vertical_datum_name") or h.get("verticalDatumName") or ""):
             el = None                                  # only compare elevations on one datum
             pts[-1][3] = None
         if env == "c" and el is not None and (el > SURGE_MAX_FT or (not wave and hag is not None and el - hag > SURGE_GROUND_MAX_FT)):
