@@ -233,6 +233,12 @@ window is docked top-left without a backdrop so the map and point pop-up stay vi
   basin's 15–50 MB zip entry with 16 parallel HTTP range requests — the server is slow per connection —
   and caches downloads and per-basin conversions so the run can be split: e.g. run with `NA`, then `EP NI SA`,
   `SI SP`, `WP`, then once with no basins to write all files).
+- **Links to Hart's own diagrams:** for the ~240 storms in Bob Hart's FSU archive (curated, mostly
+  Atlantic, 1950s–2021), the window links straight to his full-track PNGs for that storm (preferring
+  ERA5, then GFS/AVN, ECMWF, …). `data/hart_links.json` is built by `build_hart_links.py`, which matches
+  archive directory names (e.g. `gifs/katrina2005/`) to tcviewer storms by year + name. The FSU server
+  sends only its leaf TLS certificate, so run it with `--cacert` pointing to a bundle that includes the
+  Sectigo intermediate (see the script's docstring). Static; rerun if Hart adds years.
 - Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupRows(d)` (table rows), events `tcv:storm` / `tcv:select`.
 
 ## Basemap

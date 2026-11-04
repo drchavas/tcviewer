@@ -812,9 +812,9 @@ window.__initViewer = function(){
         <tr><td class="k">ROCI</td><td class="v">${num(d.roci,' nm')}</td></tr>
         <tr><td class="k">Dist. to land</td><td class="v">${d.lf?'<span style="color:#ff5252;font-weight:700">LANDFALL</span>':(d.d2l==null?NA:(d.d2l===0?'<span style="color:#ff7b7b">over land</span>':`${d.d2l} km`))}</td></tr>
         <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
+        <tr><td colspan="2" class="quad" style="padding:5px 0 6px;white-space:normal">radii shown as non-zero mean [NE/SE/SW/NW]</td></tr>
         ${TCV.popupRows ? TCV.popupRows(d) : ''}
       </table>
-      <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
       ${histsHtml(d)}</div>`;
   }
 
@@ -1303,6 +1303,6 @@ window.__initViewer = function(){
 })();
 </script>
 <script src="feedback.js" defer></script>
-<script src="cps.js?v=5" defer></script>
+<script src="cps.js?v=7" defer></script>
 </body>
 </html>

@@ -10,6 +10,10 @@
   const cache = {};
   const load = b => cache[b] || (cache[b] = fetch('data/cps_' + b + '.json')
     .then(r => r.ok ? r.json() : {storms:{}}).catch(() => ({storms:{}})));
+  let hart = null;       // sid -> {src, a, b}: Bob Hart's own diagrams (data/hart_links.json, build_hart_links.py)
+  const loadHart = () => hart || (hart = fetch('data/hart_links.json').then(r => r.ok ? r.json() : {}).catch(() => ({})));
+  const SRC = {era5:'ERA5', erai:'ERA-Interim', gfs:'GFS', avn:'GFS/AVN', ec:'ECMWF', ncep:'NCEP reanalysis',
+               ngp:'NOGAPS', cmc:'CMC', ukm:'UKMET', jma:'JMA', merra:'MERRA'};
   let cur = null;        // {storm, pts, cps:[[t,B,VTL,VTU,trackIndex,raw]], byT:Map, et:[on,end]}
   let sel = null;        // selected track index
 
@@ -56,6 +60,9 @@
     border-radius:14px;box-shadow:0 18px 48px rgba(0,0,0,.5);padding:16px 18px 14px;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;position:relative}
   .cps-win h2{margin:0;padding-right:28px;font-size:17px;font-weight:650}
   .cps-win .cps-sub{margin:2px 0 10px;color:#9fb0c0;font-size:12.5px}
+  .cps-hart{margin:-6px 0 10px;font-size:12.5px;color:#c9d6e2}
+  .cps-hart:empty{display:none}
+  .cps-hart a{color:#7fb8ff}
   .cps-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#9fb0c0;font-size:22px;line-height:1;padding:4px 6px;cursor:pointer}
   .cps-x:hover,.cps-x:focus-visible{color:#fff}
   .cps-plots{display:flex;gap:16px}
@@ -86,7 +93,7 @@
     back = document.createElement('div'); back.className = 'cps-back'; back.hidden = true;
     back.innerHTML = `<div class="cps-win" role="dialog" aria-labelledby="cps-title">
       <button type="button" class="cps-x" aria-label="Close">×</button>
-      <h2 id="cps-title">${NAME}</h2><div class="cps-sub"></div>
+      <h2 id="cps-title">${NAME}</h2><div class="cps-sub"></div><div class="cps-hart"></div>
       <div class="cps-plots"><div><div class="cps-ptitle">Thermal asymmetry (B) vs. lower-level warm/cold core (−V<sub>T</sub><sup>L</sup>)</div><div class="cps-p1"></div></div>
         <div><div class="cps-ptitle">Upper (−V<sub>T</sub><sup>U</sup>) vs. lower (−V<sub>T</sub><sup>L</sup>) warm/cold core</div><div class="cps-p2"></div></div></div>
       <div class="cps-now" aria-live="polite"></div>
@@ -191,6 +198,13 @@
     const s = cur.storm, nm = s.name && s.name !== 'UNNAMED' ? s.name.replace(/\w\S*/g, t => t[0] + t.slice(1).toLowerCase()) : 'Unnamed';
     back.querySelector('#cps-title').textContent = `${NAME} — ${nm} (${s.year})`;
     back.querySelector('.cps-sub').textContent = `${fmt(cur.cps[0][0])} ${cur.cps[0][0].slice(0,4)} – ${fmt(cur.cps[cur.cps.length-1][0])} · ${cur.cps.length} six-hourly points · ERA5 via RABTracks`;
+    const hl = back.querySelector('.cps-hart'); hl.innerHTML = '';
+    loadHart().then(H => {
+      const h = H[s.sid]; if(!h || !cur || cur.storm !== s) return;
+      const lk = (u, t) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : '';
+      hl.innerHTML = `Bob Hart&rsquo;s own diagrams for this storm (${SRC[h.src] || h.src} analysis): ` +
+        [lk(h.a, 'B vs &minus;V<sub>T</sub><sup>L</sup>'), lk(h.b, '&minus;V<sub>T</sub><sup>U</sup> vs &minus;V<sub>T</sub><sup>L</sup>')].filter(Boolean).join(' &middot; ') + ' &#8599;';
+    });
     const a = plot(1), b = plot(2); axes = [a, b];
     back.querySelector('.cps-p1').innerHTML = a.svg; back.querySelector('.cps-p2').innerHTML = b.svg;
     // phase timeline bar
@@ -248,7 +262,7 @@
   // ---- point pop-up rows (index.html calls TCV.popupRows(d) inside the pop-up table) ----
   const VT = u => `&minus;V<sub>T</sub><sup>${u}</sup>`;
   const SEP = 'border-top:1px solid #2a3a4d;padding-top:5px';
-  const KEY = `Type<br><span class="quad">Hart phase<br>space (RAB)</span>`;
+  const KEY = `Type <span class="quad">(Hart phase <span style="white-space:nowrap">space - RAB)</span></span>`;
   function popupRows(d){
     if(!cur) return '';                                   // storm has no phase-space data
     const p = nearest(d.t), link = '<a href="#" onclick="window.__cpsOpen();return false" style="color:#c58cff;font-weight:400">diagram</a>';
