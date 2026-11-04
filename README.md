@@ -199,30 +199,40 @@ flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfal
 | Power outages | DOE/ORNL EAGLE-I (Figshare 24237376, CC BY 4.0): county customers out every 15 min, Nov 2014–2025 (~13 GB raw; the 2023 file names the column `sum`) | each year is streamed once and cut to its storms' windows ([U.S. arrival − 4 d, departure + 12 d]); the raw file is then deleted (set `KEEP_EAGLEI_RAW=1` to keep it) and only the small extract cached. Per county: gaps ≤ 2 h forward-filled (a missing report isn't a restoration), 75-min running median (single-report spikes), routine pre-storm outages (median of days −4…−1) subtracted, capped at EAGLE-I's modeled customer count. Counted if the peak falls between 12 h before U.S. arrival and 2 d after departure, is ≥ 100 customers and ≥ 1 %, in a county the storm touched (wind, ≥ 1 in rain, Storm Events or high-water marks). Stored: peak, % of customers, customer-hours, hours until back under 10 % of peak; plus an hourly storm-wide total. Checks: Irma 7.1 M peak, Milton 3.2 M, Ian 2.5 M, Ida 1.1 M, Beryl 2.7 M. Coverage gaps: Puerto Rico in early years, parts of coastal Texas in 2017 (Harvey undercounted); nothing before 2015 or for the current year until EAGLE-I publishes it |
 | Population | `geo/county_pop.json` (Census V2024) | counties in the 34-kt area |
 
-## Cyclone phase space (`cps.js`, `data/cps_<basin>.json`)
+## Hart phase space (RAB) (`cps.js`, `data/cps_<basin>.json`, `build_cps.py`)
 
-Hart (2003) cyclone phase space for ~7,450 storms, 1940–2025 (about 90–97% of tropical-storm-strength
-storms in each basin). Opened from the "Cyclone phase space (Hart) →" link under the storm title
-(shown only when the storm has data) or the "diagram" link in a track point's pop-up. The pop-up lists "Type (RAB phase space)" at the
-bottom of its table, under ATCF ID, plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
-and extratropical-transition start/end (Evans & Hart 2003: starts when B ≥ 10 m, ends when −VTL < 0);
-clicking a point selects that time on the map (and vice versa, via the `tcv:select` event).
+Hart (2003) cyclone phase space for ~7,500 storms, 1940–2025 (88–97% of tropical-storm-strength storms
+per basin; lower before 1979). Labelled "Hart phase space (RAB)": people know Hart's diagrams, and
+"RAB" makes clear these are RABTracks/ERA5 values, not Bob Hart's own analyses. Opened from the
+"Hart phase space (RAB) →" link under the storm title (shown only when the storm has data) or the
+"diagram" link in a track point's pop-up. The pop-up lists, at the bottom under ATCF ID, the phase type
+plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams
+(B vs −VTL; −VTU vs −VTL), a phase timeline and extratropical-transition times; clicking a point selects
+that time on the map (and vice versa, via the `tcv:select` event). On wide screens (≥ 1100 px) the
+window is docked top-left without a backdrop so the map and point pop-up stay visible.
 
 - **Source:** [RABTracks](https://github.com/Huracan-project/RABTracks) (Bourdin et al., ESSD preprint
-  essd-2026-403; GPL-3.0), source `TRACK-ERA5` — ERA5 reanalysis tracks matched to IBTrACS SIDs with
-  B, VTL, VTU computed along them. We keep the 24-h running means (raw values at the two track ends),
-  only within the storm's IBTrACS lifetime. VTL/VTU in RABTracks are already signed warm-core-positive,
-  i.e. they are Hart's −VTL/−VTU.
-- Bob Hart's FSU site (moe.met.fsu.edu/cyclonephase) only serves images (GFS-based, curated storms),
-  so there is nothing numeric to ingest from it. ERA5 smooths small intense cores, so values are
-  typically somewhat weaker than his diagrams.
-- **Phase categories** (per point, in `cps.js`): symmetric if B < 10 m; warm core if −VTL > 0; deep if
-  −VTU > 0 too → symmetric deep / shallow warm core, asymmetric warm core (hybrid), asymmetric cold
-  core (extratropical), symmetric cold core.
-- **Static dataset:** the refresh jobs don't touch it, so storms after 2025 (and the current season)
-  have no phase-space link. Rebuild by hand when RABTracks is updated: `python3 build_cps.py`
-  (needs numpy + netCDF4; fetches each basin's ~15–50 MB entry from the 160 MB zip with parallel
-  HTTP range requests and decompresses in memory; `python3 build_cps.py NA` rebuilds one basin).
+  essd-2026-403; GPL-3.0; corresponding author Stella Bourdin), source `TRACK-ERA5` — ERA5 tracks
+  matched to IBTrACS SIDs with B, VTL, VTU computed along them. RABTracks' VTL/VTU are already
+  warm-core-positive (Hart's −VTL/−VTU); B is hemisphere-adjusted.
+- **Processing (`build_cps.py`):** centred 24-h running means (`*_roll`; raw values at the two track
+  ends, flagged and drawn hollow); clipped to the IBTrACS lifetime; points where the ERA5 centre is
+  > 400 km from the (time-interpolated) IBTrACS position are dropped (~5% of points; the ERA5 track
+  sometimes follows another system); values kept to 0.1 m so near-zero thermal winds keep their sign;
+  storms whose provisional IBTrACS SID changed (2025 WP/NI, some 1970s) are re-keyed by name + start date.
+- **Phase types** (`cps.js`, Hart's thresholds): asymmetric if B ≥ 10 m; warm core if −VTL > 0; deep if
+  −VTU > 0 too → symmetric deep / shallow warm core, asymmetric warm core (hybrid), asymmetric cold core
+  (extratropical), symmetric cold core. When ERA5 says cold core but IBTrACS has a hurricane (TS
+  nature, ≥ 64 kt) the label is greyed with "ERA5 likely misses this hurricane's warm core" (3–11% of
+  hurricane points, by basin).
+- **Extratropical transition** = RABTracks' own `ET` flag (onset: last symmetric, intensifying warm
+  core with |B| < 15 m; complete: first asymmetric cold core), kept when that time is within the shown
+  period. (An earlier "first B ≥ 10 m" rule gave false early ETs — e.g. Igor 2010 — so don't go back.)
+- **Static dataset:** the refresh jobs don't touch it; storms after 2025 have no link. Rebuild when
+  RABTracks is updated: `python3 build_cps.py --cache ~/work/rabc` (needs numpy + netCDF4; fetches each
+  basin's 15–50 MB zip entry with 16 parallel HTTP range requests — the server is slow per connection —
+  and caches downloads and per-basin conversions so the run can be split: e.g. run with `NA`, then `EP NI SA`,
+  `SI SP`, `WP`, then once with no basins to write all files).
 - Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupRows(d)` (table rows), events `tcv:storm` / `tcv:select`.
 
 ## Basemap
