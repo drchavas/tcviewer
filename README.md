@@ -199,6 +199,32 @@ flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfal
 | Power outages | DOE/ORNL EAGLE-I (Figshare 24237376, CC BY 4.0): county customers out every 15 min, Nov 2014–2025 (~13 GB raw; the 2023 file names the column `sum`) | each year is streamed once and cut to its storms' windows ([U.S. arrival − 4 d, departure + 12 d]); the raw file is then deleted (set `KEEP_EAGLEI_RAW=1` to keep it) and only the small extract cached. Per county: gaps ≤ 2 h forward-filled (a missing report isn't a restoration), 75-min running median (single-report spikes), routine pre-storm outages (median of days −4…−1) subtracted, capped at EAGLE-I's modeled customer count. Counted if the peak falls between 12 h before U.S. arrival and 2 d after departure, is ≥ 100 customers and ≥ 1 %, in a county the storm touched (wind, ≥ 1 in rain, Storm Events or high-water marks). Stored: peak, % of customers, customer-hours, hours until back under 10 % of peak; plus an hourly storm-wide total. Checks: Irma 7.1 M peak, Milton 3.2 M, Ian 2.5 M, Ida 1.1 M, Beryl 2.7 M. Coverage gaps: Puerto Rico in early years, parts of coastal Texas in 2017 (Harvey undercounted); nothing before 2015 or for the current year until EAGLE-I publishes it |
 | Population | `geo/county_pop.json` (Census V2024) | counties in the 34-kt area |
 
+## Cyclone phase space (`cps.js`, `data/cps_<basin>.json`)
+
+Hart (2003) cyclone phase space for ~7,450 storms, 1940–2025 (about 90–97% of tropical-storm-strength
+storms in each basin). Opened from the "Cyclone phase space (Hart) →" link under the storm title
+(shown only when the storm has data) or the "diagram" link in a track point's pop-up, which also shows
+that time's phase. The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
+and extratropical-transition start/end (Evans & Hart 2003: starts when B ≥ 10 m, ends when −VTL < 0);
+clicking a point selects that time on the map (and vice versa, via the `tcv:select` event).
+
+- **Source:** [RABTracks](https://github.com/Huracan-project/RABTracks) (Bourdin et al., ESSD preprint
+  essd-2026-403; GPL-3.0), source `TRACK-ERA5` — ERA5 reanalysis tracks matched to IBTrACS SIDs with
+  B, VTL, VTU computed along them. We keep the 24-h running means (raw values at the two track ends),
+  only within the storm's IBTrACS lifetime. VTL/VTU in RABTracks are already signed warm-core-positive,
+  i.e. they are Hart's −VTL/−VTU.
+- Bob Hart's FSU site (moe.met.fsu.edu/cyclonephase) only serves images (GFS-based, curated storms),
+  so there is nothing numeric to ingest from it. ERA5 smooths small intense cores, so values are
+  typically somewhat weaker than his diagrams.
+- **Phase categories** (per point, in `cps.js`): symmetric if B < 10 m; warm core if −VTL > 0; deep if
+  −VTU > 0 too → symmetric deep / shallow warm core, asymmetric warm core (hybrid), asymmetric cold
+  core (extratropical), symmetric cold core.
+- **Static dataset:** the refresh jobs don't touch it, so storms after 2025 (and the current season)
+  have no phase-space link. Rebuild by hand when RABTracks is updated: `python3 build_cps.py`
+  (needs numpy + netCDF4; fetches each basin's ~15–50 MB entry from the 160 MB zip with parallel
+  HTTP range requests and decompresses in memory; `python3 build_cps.py NA` rebuilds one basin).
+- Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupExtra(d)`, events `tcv:storm` / `tcv:select`.
+
 ## Basemap
 Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CARTO's key-free dark
 tiles now stamp "API key required" across every tile, which is why this was swapped. **Esri tile

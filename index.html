@@ -173,6 +173,7 @@
      wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.
      Source: NOAA IBTrACS v04r01 &mdash; <b>all global basins</b>, using the US agency for each
      (NHC in the Atlantic &amp; E/C Pacific, JTWC elsewhere); all storms in the record.
+     Most storms from 1940&ndash;2025 also have a <b>cyclone phase space</b> diagram (Hart 2003; from ERA5).
      Site updated regularly. <a href="#feedback" data-feedback>Send feedback</a> with bugs or requests.</p>
   <div class="hmeta">Data last updated <span id="lastUpd">&mdash;</span> &middot; For comprehensive storm data visualization (e.g. radar/satellite), check out Michael Fischer&rsquo;s <a href="https://tcatlas.org/" target="_blank" rel="noopener">tcatlas.org</a> &middot; <a href="#feedback" data-feedback>Send feedback</a> &middot; &copy; 2026 <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a> (Purdue University)</div>
 </header>
@@ -645,8 +646,11 @@ window.__initViewer = function(){
     infoBox.style.display = 'block';
     document.body.classList.add('info-open');
     updateTSMarker(i);
+    document.dispatchEvent(new CustomEvent('tcv:select', {detail:i}));
   }
-  function closeInfo(){ curSel = null; hlGroup.clearLayers(); infoBox.style.display='none'; document.body.classList.remove('info-open'); updateTSMarker(null); }
+  function closeInfo(){ curSel = null; hlGroup.clearLayers(); infoBox.style.display='none'; document.body.classList.remove('info-open'); updateTSMarker(null);
+    document.dispatchEvent(new CustomEvent('tcv:select', {detail:null})); }
+  TCV.select = i => { if(curPts && curPts[i]) selectPoint(i, pointData(curPts[i])); };   // used by cps.js
 
   // ---------- lifecycle time series (single-storm view) ----------
   const tsEl = document.getElementById('timeseries');
@@ -810,6 +814,7 @@ window.__initViewer = function(){
         <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
       </table>
       <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
+      ${TCV.popupExtra ? TCV.popupExtra(d) : ''}
       ${histsHtml(d)}</div>`;
   }
 
@@ -1298,5 +1303,6 @@ window.__initViewer = function(){
 })();
 </script>
 <script src="feedback.js" defer></script>
+<script src="cps.js?v=1" defer></script>
 </body>
 </html>
