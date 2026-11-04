@@ -2,18 +2,14 @@
    Data: data/cps_<basin>.json, built by build_cps.py from RABTracks (TRACK tracker on ERA5, 1940–2025):
    {storms: {sid: {p: [[t, B, VTL, VTU(, raw)], ...], et: [onset, complete]}}}; VTL/VTU > 0 = warm core
    (Hart's −VTL/−VTU), centred 24-h running means (raw=1: unsmoothed end-of-track value), m.
-   Adds: a "Hart phase space (RAB)" link under the storm title, rows at the bottom of the point pop-up,
-   and a window with Hart's two diagrams that stays in sync with the selected track point. */
+   Adds rows at the bottom of the point pop-up and, from their "diagram" link, a window with Hart's two
+   diagrams that stays in sync with the selected track point. */
 (function(){
   if(window.__cpsLoaded) return; window.__cpsLoaded = true;
   const NAME = 'Hart phase space (RAB)';
   const cache = {};
   const load = b => cache[b] || (cache[b] = fetch('data/cps_' + b + '.json')
     .then(r => r.ok ? r.json() : {storms:{}}).catch(() => ({storms:{}})));
-  let hart = null;       // sid -> {src, a, b}: Bob Hart's own diagrams (data/hart_links.json, build_hart_links.py)
-  const loadHart = () => hart || (hart = fetch('data/hart_links.json').then(r => r.ok ? r.json() : {}).catch(() => ({})));
-  const SRC = {era5:'ERA5', erai:'ERA-Interim', gfs:'GFS', avn:'GFS/AVN', ec:'ECMWF', ncep:'NCEP reanalysis',
-               ngp:'NOGAPS', cmc:'CMC', ukm:'UKMET', jma:'JMA', merra:'MERRA'};
   let cur = null;        // {storm, pts, cps:[[t,B,VTL,VTU,trackIndex,raw]], byT:Map, et:[on,end]}
   let sel = null;        // selected track index
 
@@ -60,9 +56,6 @@
     border-radius:14px;box-shadow:0 18px 48px rgba(0,0,0,.5);padding:16px 18px 14px;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;position:relative}
   .cps-win h2{margin:0;padding-right:28px;font-size:17px;font-weight:650}
   .cps-win .cps-sub{margin:2px 0 10px;color:#9fb0c0;font-size:12.5px}
-  .cps-hart{margin:-6px 0 10px;font-size:12.5px;color:#c9d6e2}
-  .cps-hart:empty{display:none}
-  .cps-hart a{color:#7fb8ff}
   .cps-x{position:absolute;top:8px;right:10px;background:none;border:none;color:#9fb0c0;font-size:22px;line-height:1;padding:4px 6px;cursor:pointer}
   .cps-x:hover,.cps-x:focus-visible{color:#fff}
   .cps-plots{display:flex;gap:16px}
@@ -85,7 +78,7 @@
   .cps-note a{color:#7fb8ff}
   .cps-warn{color:${MUTED};font-size:11px;font-weight:400}
   @media (max-width:720px){ .cps-plots{flex-direction:column} .cps-plots svg text{font-size:13px} }`;
-  let back, linkEl, lastFocus;
+  let back, lastFocus;
   const docked = () => window.innerWidth >= 1100;          // wide screens: keep the map and pop-up visible
   function ensureUI(){
     if(back) return;
@@ -93,7 +86,7 @@
     back = document.createElement('div'); back.className = 'cps-back'; back.hidden = true;
     back.innerHTML = `<div class="cps-win" role="dialog" aria-labelledby="cps-title">
       <button type="button" class="cps-x" aria-label="Close">×</button>
-      <h2 id="cps-title">${NAME}</h2><div class="cps-sub"></div><div class="cps-hart"></div>
+      <h2 id="cps-title">${NAME}</h2><div class="cps-sub"></div>
       <div class="cps-plots"><div><div class="cps-ptitle">Thermal asymmetry (B) vs. lower-level warm/cold core (−V<sub>T</sub><sup>L</sup>)</div><div class="cps-p1"></div></div>
         <div><div class="cps-ptitle">Upper (−V<sub>T</sub><sup>U</sup>) vs. lower (−V<sub>T</sub><sup>L</sup>) warm/cold core</div><div class="cps-p2"></div></div></div>
       <div class="cps-now" aria-live="polite"></div>
@@ -137,18 +130,6 @@
     });
     window.addEventListener('resize', () => { if(back && !back.hidden) back.classList.toggle('dock', docked()); });
   }
-  function ensureLink(){
-    if(linkEl && document.body.contains(linkEl)) return linkEl;
-    const imp = document.getElementById('impLink'); if(!imp) return null;
-    linkEl = document.createElement('a'); linkEl.className = 'slink'; linkEl.href = '#'; linkEl.hidden = true;
-    linkEl.style.display = 'block'; linkEl.style.color = '#c58cff';
-    linkEl.textContent = NAME + ' →';
-    linkEl.addEventListener('click', e => { e.preventDefault(); openWin(); });
-    imp.insertAdjacentElement('afterend', linkEl);
-    const s = document.createElement('style'); s.textContent = '.slink[hidden]{display:none !important}'; document.head.appendChild(s);
-    return linkEl;
-  }
-
   // ---- diagrams ----
   function plot(kind){
     const c = cur.cps, W = 440, H = 400, m = {l:46, r:12, t:12, b:34};
@@ -198,13 +179,6 @@
     const s = cur.storm, nm = s.name && s.name !== 'UNNAMED' ? s.name.replace(/\w\S*/g, t => t[0] + t.slice(1).toLowerCase()) : 'Unnamed';
     back.querySelector('#cps-title').textContent = `${NAME} — ${nm} (${s.year})`;
     back.querySelector('.cps-sub').textContent = `${fmt(cur.cps[0][0])} ${cur.cps[0][0].slice(0,4)} – ${fmt(cur.cps[cur.cps.length-1][0])} · ${cur.cps.length} six-hourly points · ERA5 via RABTracks`;
-    const hl = back.querySelector('.cps-hart'); hl.innerHTML = '';
-    loadHart().then(H => {
-      const h = H[s.sid]; if(!h || !cur || cur.storm !== s) return;
-      const lk = (u, t) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : '';
-      hl.innerHTML = `Bob Hart&rsquo;s own diagrams for this storm (${SRC[h.src] || h.src} analysis): ` +
-        [lk(h.a, 'B vs &minus;V<sub>T</sub><sup>L</sup>'), lk(h.b, '&minus;V<sub>T</sub><sup>U</sup> vs &minus;V<sub>T</sub><sup>L</sup>')].filter(Boolean).join(' &middot; ') + ' &#8599;';
-    });
     const a = plot(1), b = plot(2); axes = [a, b];
     back.querySelector('.cps-p1').innerHTML = a.svg; back.querySelector('.cps-p2').innerHTML = b.svg;
     // phase timeline bar
@@ -271,14 +245,14 @@
     const lab = bad ? `<span style="color:${MUTED}">${ph.l}</span><br><span class="cps-warn" style="color:${MUTED};font-size:11px;font-weight:400">ERA5 likely misses this hurricane&rsquo;s warm core</span>`
                     : `<span style="color:${ph.c}">${ph.l}</span>`;
     return `<tr><td class="k" style="vertical-align:top;white-space:normal;${SEP}">${KEY}</td><td class="v" style="white-space:normal;${SEP}">${lab} (${link})</td></tr>
-        <tr><td class="k">B, ${VT('L')}</td><td class="v">${fx(p[1])}, ${fx(p[2])} m</td></tr>
-        <tr><td class="k">${VT('L')}, ${VT('U')}</td><td class="v">${fx(p[2])}, ${fx(p[3])} m</td></tr>`;
+        <tr><td class="k">B</td><td class="v">${fx(p[1])} m</td></tr>
+        <tr><td class="k">${VT('L')}</td><td class="v">${fx(p[2])} m</td></tr>
+        <tr><td class="k">${VT('U')}</td><td class="v">${fx(p[3])} m</td></tr>`;
   }
   window.__cpsOpen = openWin;
 
   async function onStorm(det){
     cur = null; sel = null;
-    const L = ensureLink(); if(L) L.hidden = true;
     if(back && !back.hidden) closeWin();
     if(!det || !det.storm || !det.storm.sid) return;
     const {storm, pts} = det;
@@ -295,7 +269,6 @@
       return [p[0], p[1], p[2], p[3], bi, p[4] ? 1 : 0];
     });
     cur = {storm, pts, cps, byT: new Map(cps.map(p => [p[0], p])), et: rec.et || []};
-    if(L) L.hidden = false;
     if(sel != null && TCV.select) TCV.select(sel);              // a point was picked while loading: refresh its pop-up
   }
   function hook(){

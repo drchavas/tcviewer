@@ -204,9 +204,8 @@ flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfal
 Hart (2003) cyclone phase space for ~7,500 storms, 1940–2025 (88–97% of tropical-storm-strength storms
 per basin; lower before 1979). Labelled "Hart phase space (RAB)": people know Hart's diagrams, and
 "RAB" makes clear these are RABTracks/ERA5 values, not Bob Hart's own analyses. Opened from the
-"Hart phase space (RAB) →" link under the storm title (shown only when the storm has data) or the
-"diagram" link in a track point's pop-up. The pop-up lists, at the bottom under ATCF ID, the phase type
-plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams
+"diagram" link in a track point's pop-up (the earlier link under the storm title was removed). The pop-up lists, at the bottom under ATCF ID, the phase type
+plus that time's B, −VTL and −VTU (one row each). The window has Hart's two diagrams
 (B vs −VTL; −VTU vs −VTL), a phase timeline and extratropical-transition times; clicking a point selects
 that time on the map (and vice versa, via the `tcv:select` event). On wide screens (≥ 1100 px) the
 window is docked top-left without a backdrop so the map and point pop-up stay visible.
@@ -233,12 +232,8 @@ window is docked top-left without a backdrop so the map and point pop-up stay vi
   basin's 15–50 MB zip entry with 16 parallel HTTP range requests — the server is slow per connection —
   and caches downloads and per-basin conversions so the run can be split: e.g. run with `NA`, then `EP NI SA`,
   `SI SP`, `WP`, then once with no basins to write all files).
-- **Links to Hart's own diagrams:** for the ~240 storms in Bob Hart's FSU archive (curated, mostly
-  Atlantic, 1950s–2021), the window links straight to his full-track PNGs for that storm (preferring
-  ERA5, then GFS/AVN, ECMWF, …). `data/hart_links.json` is built by `build_hart_links.py`, which matches
-  archive directory names (e.g. `gifs/katrina2005/`) to tcviewer storms by year + name. The FSU server
-  sends only its leaf TLS certificate, so run it with `--cacert` pointing to a bundle that includes the
-  Sectigo intermediate (see the script's docstring). Static; rerun if Hart adds years.
+- Bob Hart's own archive is linked generically from the window's note. (Storm-specific links were tried
+  and dropped: his archive is a curated set ending in 2021, so most storms had no link.)
 - Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupRows(d)` (table rows), events `tcv:storm` / `tcv:select`.
 
 ## Basemap
