@@ -212,9 +212,9 @@
   function popupRows(d){
     if(!cur) return '';                                   // storm has no phase-space data
     const p = nearest(d.t), link = '<a href="#" onclick="window.__cpsOpen();return false" style="color:#c58cff;font-weight:400">diagram</a>';
-    if(!p) return `<tr><td class="k">Type<br><span class="quad">(phase space)</span></td><td class="v">&mdash; (${link})</td></tr>`;
+    if(!p) return `<tr><td class="k" style="border-top:1px solid #2a3a4d;padding-top:5px">Type<br><span class="quad">(RAB phase space)</span></td><td class="v" style="border-top:1px solid #2a3a4d;padding-top:5px">&mdash; (${link})</td></tr>`;
     const ph = PH[phase(p[1], p[2], p[3])];
-    return `<tr><td class="k" style="vertical-align:top">Type<br><span class="quad">(phase space)</span></td><td class="v" style="white-space:normal"><span style="color:${ph.c}">${ph.l}</span> (${link})</td></tr>
+    return `<tr><td class="k" style="vertical-align:top;border-top:1px solid #2a3a4d;padding-top:5px">Type<br><span class="quad">(RAB phase space)</span></td><td class="v" style="white-space:normal;border-top:1px solid #2a3a4d;padding-top:5px"><span style="color:${ph.c}">${ph.l}</span> (${link})</td></tr>
         <tr><td class="k">B, ${VT('L')}</td><td class="v">${p[1]}, ${p[2]} m</td></tr>
         <tr><td class="k">${VT('L')}, ${VT('U')}</td><td class="v">${p[2]}, ${p[3]} m</td></tr>`;
   }

@@ -798,7 +798,6 @@ window.__initViewer = function(){
     return `<div class="pop"><h4>${ft.date} &nbsp; ${ft.time} ${badge}</h4>
       <table>
         <tr><td class="k" style="vertical-align:top">Type <span class="quad">(IBTrACS)</span></td><td class="v">${natLabel(d.nat)}</td></tr>
-        ${TCV.popupRows ? TCV.popupRows(d) : ''}
         <tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;N</td></tr>
         <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr>
         <tr><td class="k">Vmax</td><td class="v">${num(d.vmax,' kt')}</td></tr>
@@ -813,6 +812,7 @@ window.__initViewer = function(){
         <tr><td class="k">ROCI</td><td class="v">${num(d.roci,' nm')}</td></tr>
         <tr><td class="k">Dist. to land</td><td class="v">${d.lf?'<span style="color:#ff5252;font-weight:700">LANDFALL</span>':(d.d2l==null?NA:(d.d2l===0?'<span style="color:#ff7b7b">over land</span>':`${d.d2l} km`))}</td></tr>
         <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
+        ${TCV.popupRows ? TCV.popupRows(d) : ''}
       </table>
       <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
       ${histsHtml(d)}</div>`;
@@ -1303,6 +1303,6 @@ window.__initViewer = function(){
 })();
 </script>
 <script src="feedback.js" defer></script>
-<script src="cps.js?v=2" defer></script>
+<script src="cps.js?v=4" defer></script>
 </body>
 </html>

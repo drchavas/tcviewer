@@ -203,8 +203,8 @@ flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfal
 
 Hart (2003) cyclone phase space for ~7,450 storms, 1940–2025 (about 90–97% of tropical-storm-strength
 storms in each basin). Opened from the "Cyclone phase space (Hart) →" link under the storm title
-(shown only when the storm has data) or the "diagram" link in a track point's pop-up. The pop-up lists "Type (IBTrACS)" and, right
-under it, "Type (phase space)" plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
+(shown only when the storm has data) or the "diagram" link in a track point's pop-up. The pop-up lists "Type (RAB phase space)" at the
+bottom of its table, under ATCF ID, plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
 and extratropical-transition start/end (Evans & Hart 2003: starts when B ≥ 10 m, ends when −VTL < 0);
 clicking a point selects that time on the map (and vice versa, via the `tcv:select` event).
 
