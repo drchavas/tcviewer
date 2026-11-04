@@ -797,7 +797,8 @@ window.__initViewer = function(){
     const badge = cat ? `<span class="badge" style="background:${cat.c}">${cat.l}</span>` : '';
     return `<div class="pop"><h4>${ft.date} &nbsp; ${ft.time} ${badge}</h4>
       <table>
-        <tr><td class="k">Type</td><td class="v">${natLabel(d.nat)}</td></tr>
+        <tr><td class="k" style="vertical-align:top">Type <span class="quad">(IBTrACS)</span></td><td class="v">${natLabel(d.nat)}</td></tr>
+        ${TCV.popupRows ? TCV.popupRows(d) : ''}
         <tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;N</td></tr>
         <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr>
         <tr><td class="k">Vmax</td><td class="v">${num(d.vmax,' kt')}</td></tr>
@@ -814,7 +815,6 @@ window.__initViewer = function(){
         <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
       </table>
       <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
-      ${TCV.popupExtra ? TCV.popupExtra(d) : ''}
       ${histsHtml(d)}</div>`;
   }
 
@@ -1303,6 +1303,6 @@ window.__initViewer = function(){
 })();
 </script>
 <script src="feedback.js" defer></script>
-<script src="cps.js?v=1" defer></script>
+<script src="cps.js?v=2" defer></script>
 </body>
 </html>

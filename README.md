@@ -203,8 +203,8 @@ flagged `"prelim": 1`, and the page shows a "Preliminary" note under the landfal
 
 Hart (2003) cyclone phase space for ~7,450 storms, 1940–2025 (about 90–97% of tropical-storm-strength
 storms in each basin). Opened from the "Cyclone phase space (Hart) →" link under the storm title
-(shown only when the storm has data) or the "diagram" link in a track point's pop-up, which also shows
-that time's phase. The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
+(shown only when the storm has data) or the "diagram" link in a track point's pop-up. The pop-up lists "Type (IBTrACS)" and, right
+under it, "Type (phase space)" plus that time's B, −VTL and −VTU (one row per Hart diagram). The window has Hart's two diagrams (B vs −VTL; −VTU vs −VTL), a phase timeline,
 and extratropical-transition start/end (Evans & Hart 2003: starts when B ≥ 10 m, ends when −VTL < 0);
 clicking a point selects that time on the map (and vice versa, via the `tcv:select` event).
 
@@ -223,7 +223,7 @@ clicking a point selects that time on the map (and vice versa, via the `tcv:sele
   have no phase-space link. Rebuild by hand when RABTracks is updated: `python3 build_cps.py`
   (needs numpy + netCDF4; fetches each basin's ~15–50 MB entry from the 160 MB zip with parallel
   HTTP range requests and decompresses in memory; `python3 build_cps.py NA` rebuilds one basin).
-- Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupExtra(d)`, events `tcv:storm` / `tcv:select`.
+- Hooks it uses in `index.html`: `TCV.select(i)`, `TCV.popupRows(d)` (table rows), events `tcv:storm` / `tcv:select`.
 
 ## Basemap
 Esri **`World_Dark_Gray_Base`** canvas tiles (key-free), attribution to Esri. CARTO's key-free dark

@@ -1,7 +1,7 @@
 /* cps.js — Hart (2003) cyclone phase space for tcviewer.org (single-storm view).
    Data: data/cps_<basin>.json, built by build_cps.py from RABTracks (TRACK tracker on ERA5, 1940–2025):
    {storms: {sid: [[t, B, VTL, VTU], ...]}}, VTL/VTU > 0 = warm core (Hart's −VTL/−VTU), 24-h running means, m.
-   Adds: a "Cyclone phase space" link under the storm title, a phase row in the point pop-up, and a
+   Adds: a "Cyclone phase space" link under the storm title, phase rows in the point pop-up, and a
    pop-up window with Hart's two diagrams that stays in sync with the selected track point. */
 (function(){
   if(window.__cpsLoaded) return; window.__cpsLoaded = true;
@@ -207,15 +207,16 @@
   }
   function openWin(){ if(!cur) return; ensureUI(); back.hidden = false; render(); }
 
-  // ---- point pop-up row (index.html calls TCV.popupExtra(d) when building the pop-up) ----
-  function popupExtra(d){
-    if(!cur) return '';
-    const p = nearest(d.t); if(!p) return '';
+  // ---- point pop-up rows (index.html calls TCV.popupRows(d) inside the pop-up table) ----
+  const VT = u => `&minus;V<sub>T</sub><sup>${u}</sup>`;
+  function popupRows(d){
+    if(!cur) return '';                                   // storm has no phase-space data
+    const p = nearest(d.t), link = '<a href="#" onclick="window.__cpsOpen();return false" style="color:#c58cff;font-weight:400">diagram</a>';
+    if(!p) return `<tr><td class="k">Type<br><span class="quad">(phase space)</span></td><td class="v">&mdash; (${link})</td></tr>`;
     const ph = PH[phase(p[1], p[2], p[3])];
-    return `<div class="quad" style="margin-top:7px;border-top:1px solid #2a3a4d;padding-top:6px">
-      <span style="color:#9fb0c0">Phase (ERA5):</span> <b style="color:${ph.c}">${ph.l}</b><br>
-      B ${p[1]} &middot; &minus;V<sub>T</sub><sup>L</sup> ${p[2]} &middot; &minus;V<sub>T</sub><sup>U</sup> ${p[3]} m
-      &middot; <a href="#" onclick="window.__cpsOpen();return false" style="color:#c58cff">diagram</a></div>`;
+    return `<tr><td class="k" style="vertical-align:top">Type<br><span class="quad">(phase space)</span></td><td class="v" style="white-space:normal"><span style="color:${ph.c}">${ph.l}</span> (${link})</td></tr>
+        <tr><td class="k">B, ${VT('L')}</td><td class="v">${p[1]}, ${p[2]} m</td></tr>
+        <tr><td class="k">${VT('L')}, ${VT('U')}</td><td class="v">${p[2]}, ${p[3]} m</td></tr>`;
   }
   window.__cpsOpen = openWin;
 
@@ -235,7 +236,7 @@
   }
   function hook(){
     if(!window.TCV){ return setTimeout(hook, 200); }
-    TCV.popupExtra = popupExtra;
+    TCV.popupRows = popupRows;
     if(TCV.current) onStorm(TCV.current);
   }
   document.addEventListener('tcv:storm', e => onStorm(e.detail));
