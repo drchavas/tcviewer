@@ -291,6 +291,9 @@ index = {"meta": meta, "clim": clim,
                      "t0": int(s["pts"][0][0][:8]), "t1": int(s["pts"][-1][0][:8])}
                     for s in cstorms]}
 total = write_json(os.path.join(DATADIR, "index.json"), index)
+# data/stamp.json : just the build time, for pages that only need "Data last updated"
+# (the extremewx.org home page card) without downloading the ~240 KB index.
+write_json(os.path.join(DATADIR, "stamp.json"), {"built": meta["built"]})
 
 by_basin = {}
 for s in cstorms:

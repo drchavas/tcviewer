@@ -84,10 +84,12 @@ jobs:
           new = open("data/index.json").read()
           index_changed = (not old) or load(old) != load(new)
           basins_changed = subprocess.run(
-              ["git", "diff", "--quiet", "--", "data/", ":(exclude)data/index.json"]
+              ["git", "diff", "--quiet", "--", "data/", ":(exclude)data/index.json",
+               ":(exclude)data/stamp.json"]
           ).returncode != 0
-          untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "data/"],
-                                     capture_output=True, text=True).stdout.strip() != ""
+          untracked = [f for f in subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "data/"],
+                                                capture_output=True, text=True).stdout.split()
+                       if f != "data/stamp.json"] != []
           impacts_changed = subprocess.run(["git", "diff", "--quiet", "--", "impacts/data/"]).returncode != 0 or \
               subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "impacts/data/"],
                              capture_output=True, text=True).stdout.strip() != ""
