@@ -1302,6 +1302,35 @@ window.__initViewer = function(){
   })();
 })();
 </script>
+<script>
+// Left-hand panels: the View panel gets the height it needs, so the storm's links under its title
+// ("Hazards & impacts of this storm") are not hidden below a scroll, and the legend gets what is
+// left (it scrolls instead; it can also be collapsed). Only on a very short map does the View panel scroll. Phones and short screens keep the CSS rules in the @media block.
+(function(){
+  const wrap = document.getElementById('mapwrap'), c = document.getElementById('controls'), l = document.getElementById('legend');
+  if(!wrap || !c || !l) return;
+  const small = matchMedia('(max-width:640px), (max-height:540px)');
+  let busy = false;
+  function fit(){
+    if(busy) return; busy = true;
+    if(small.matches){ c.style.maxHeight = ''; l.style.maxHeight = ''; }
+    else {
+      const H = wrap.clientHeight;
+      c.style.maxHeight = 'none';
+      const room = H - 10 - 14 - 12;                       // top 10, bottom 14, 12 px gap between
+      const ch = Math.min(c.offsetHeight, room - 70);       // View panel first; legend keeps >= 70 px and scrolls
+      c.style.maxHeight = ch + 'px';
+      l.style.maxHeight = Math.max(0, room - ch) + 'px';
+    }
+    busy = false;
+  }
+  addEventListener('resize', fit); addEventListener('load', fit);
+  c.addEventListener('toggle', fit); l.addEventListener('toggle', fit);
+  document.addEventListener('tcv:storm', () => setTimeout(fit, 0));
+  new MutationObserver(fit).observe(c, {subtree: true, childList: true, characterData: true, attributeFilter: ['hidden']});
+  fit();
+})();
+</script>
 <script src="feedback.js" defer></script>
 <script src="cps.js?v=11" defer></script>
 </body>

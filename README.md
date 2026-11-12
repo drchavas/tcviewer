@@ -102,6 +102,14 @@ it); any manual zoom/pan also locks it. A **"Zoom to global"** button resets it.
 Storm unlocks and re-frames the storm. Programmatic moves are guarded so they don't count as a user
 zoom.
 
+### Left-hand panel heights
+The View panel and the legend used to get a fixed 50% of the map height each, so on shorter
+windows the storm's "Hazards & impacts of this storm →" link slid below the View panel's scroll and
+looked missing. A small script at the end of `index.html` now gives the View panel the height it
+needs (up to the map height minus 70 px for the legend) and the legend the rest; it re-fits on
+resize, on opening/closing either panel, on each storm render and when the link appears. Phones
+and short screens (the `@media (max-width:640px), (max-height:540px)` block) keep the CSS rules.
+
 ### Wind-footprint performance
 Building the swath unions (polygon-clipping) is by far the slowest step, so **only checked layers
 are built** — hidden layers cost nothing (previously Rmax was computed on every load despite being
