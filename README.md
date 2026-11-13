@@ -102,6 +102,15 @@ it); any manual zoom/pan also locks it. A **"Zoom to global"** button resets it.
 Storm unlocks and re-frames the storm. Programmatic moves are guarded so they don't count as a user
 zoom.
 
+### Page layout: app on one screen, "About this site" below
+The app (`#screen`: header + map + time-series strip) is exactly one screen tall (`100vh`/`100dvh`),
+and the page scrolls to an `#about` section below it holding the description, sources, the
+tcatlas.org / global-tropical-cyclones.com pointers, the copyright and the feedback line. The header
+is slim: title, the Storm Hazards & Impacts pill, and one line "Data last updated … · About this site ↓ ·
+Send feedback". (Until 2026-11-13 the body was `overflow:hidden` and all of that text sat in the header,
+shrinking the map.) Keep the explanatory text on the page rather than in a pop-up: tcviewer is the
+indexable site, and search engines weight visible text.
+
 ### Left-hand panel heights
 The View panel and the legend used to get a fixed 50% of the map height each, so on shorter
 windows the storm's "Hazards & impacts of this storm →" link slid below the View panel's scroll and
