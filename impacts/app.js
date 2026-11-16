@@ -351,6 +351,7 @@ function layerUnavailable(l){
   if(l.needs === 'rain' && !S.rain) return 'no data';
   if(l.needs === 'hwmc' && !(S.hwm || []).some(p => p[4] === 'c')) return S.hwm && S.hwm.length ? 'no coastal marks' : 'not surveyed';
   if(l.needs === 'hwmr' && !(S.hwm || []).some(p => p[4] === 'r')) return S.hwm && S.hwm.length ? 'no inland marks' : 'not surveyed';
+  if((l.needs === 'tor' || l.needs === 'se') && !S.se && S.year < 1996) return 'from 1996 on';
   if(l.needs === 'tor' && !(S.se && S.se.tor)) return 'none reported';
   if(l.needs === 'se' && !S.se) return 'no reports';
   if(l.needs === 'out' && !S.outage) return S.year < 2015 ? 'from 2015 on' : 'no data';
@@ -393,6 +394,14 @@ function renderHead(){
     line += `<span class="prelim"><b>Preliminary.</b> This storm is recent, so some data are still coming in: storm reports, high-water marks,
       deaths, damage and power outages are added as agencies publish them (weeks to months)${est ? '. Landfall is estimated from where the center crossed the coast until NHC releases its final best track' : ''}.</span>`;
   }
+  if(!S.prelim && lf.some(x => x.est)){
+    line += `<span class="prelim">Landfall estimated from where the track crosses the coast: the best track has no official landfall record for this storm.</span>`;
+  }
+  if(cur.year < 2004){
+    line += `<span class="prelim"><b>Older storm.</b> Before 2004 the wind areas come from NHC&rsquo;s real-time wind-radii estimates
+      (Extended Best Track) rather than its post-season best track${cur.year < 1996 ? '; county storm reports (deaths, injuries, damage, tornadoes) are not available before 1996' : ''},
+      USGS high-water-mark surveys are rare, and power-outage data start in 2015.</span>`;
+  }
   $('#lfline').innerHTML = line;
   $('#links').innerHTML = `<a href="../?sid=${encodeURIComponent(S.sid)}">See the meteorology (track, wind radii, intensity) →</a>`
     + (S.fatalities && S.fatalities.src ? `<a href="${esc(S.fatalities.src)}" target="_blank" rel="noopener">NHC report ↗</a>` : '');
@@ -429,19 +438,21 @@ function renderTiles(){
   const offCONUS = cur.states.some(s => ['PR','HI','VI','AK'].includes(s));
   if(S.rain) H.push(tile(`${S.rain.peak.in.toFixed(1)} <small>in</small>`, offCONUS ? 'Most rain in the lower 48' : 'Most rain (4-km grid)', rainWhere()));
   else H.push(tile('—', 'Rain', 'not available (outside lower 48)', true));
-  H.push(tile(`${S.se ? S.se.tor : 0}`, 'Tornadoes reported', S.se && S.se.tor ? torMax() : ''));
+  if(!S.se && cur.year < 1996) H.push(tile('—', 'Tornadoes reported', 'Storm Events start in 1996', true));
+  else H.push(tile(`${S.se ? S.se.tor : 0}`, 'Tornadoes reported', S.se && S.se.tor ? torMax() : ''));
   t.push(group('Hazards', COL.haz, H));
   // impacts
   const I = [];
   if(S.fatalities && !offCONUS) I.push(tile(n0(S.fatalities.total), 'Direct deaths', 'Muller et al. 2026 · lower 48'));
   else if(S.se && S.fatalities) I.push(tile(n0(S.se.dd), 'Direct deaths reported', `all areas · Storm Events · ${n0(S.fatalities.total)} in the lower 48 (Muller et al.)`));
   else if(S.se) I.push(tile(n0(S.se.dd), 'Direct deaths reported', `+ ${n0(S.se.di)} indirect · Storm Events`));
-  else I.push(tile('—', 'Deaths', 'no reports', true));
+  else if(S.fatalities) I.push(tile(n0(S.fatalities.total), 'Direct deaths in the lower 48', 'Muller et al. 2026'));
+  else I.push(tile('—', 'Deaths', cur.year < 1996 ? 'Storm Events start in 1996' : 'no reports', true));
   const DN = S.damage_norm;
   if(DN && DN.total) I.push(tile(money(DN.total, true), 'Damage, normalized to today',
     `${DN.usd} $ · ${DN.src === 'mooney' ? 'Mooney et al. 2026' : 'Klotzbach et al. 2026'}`));
   else if(S.se) I.push(tile(money(S.se.pd + S.se.cd, true), 'Damage reported', 'Storm Events, as reported'));
-  else I.push(tile('—', 'Damage', 'no reports', true));
+  else I.push(tile('—', 'Damage', cur.year < 1996 ? 'Storm Events start in 1996' : 'no reports', true));
   if(S.outage){
     const pk = S.outage.peak, d = utc(pk.t);
     I.push(tile(people(pk.n, true), 'Peak customers without power',

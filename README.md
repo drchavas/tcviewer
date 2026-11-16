@@ -179,8 +179,20 @@ time). Shareable URLs: `impacts/?storm=helene-2024&layer=rain&county=37021`.
   (storm list + headline numbers), `impacts/data/storms/<slug>.json` (one per storm, 30–300 KB),
   `impacts/sources/` (Klotzbach et al. 2026 supplementary landfall table, CC BY 4.0). Shares
   `geo/counties.topo.json.gz`, `geo/states.topo.json.gz`, `geo/county_pop.json` with the main page.
-- **Storms**: every Atlantic / East-Pacific storm since 2004 whose 34-kt wind radii touched a U.S. county
-  (133 as of Oct 2026). 2004 is when wind radii became routine.
+- **Storms**: every Atlantic / East-Pacific storm since **1988** whose 34-kt wind radii touched a U.S. county
+  (201 as of Nov 2026: 65 from 1988–2003, 136 from 2004 on). Extended back from 2004 on 2026-11-16 using the
+  Extended Best Track radii merged into `data/basin_*.json` (see Data notes). What older storms get:
+  - wind (real-time radii, not post-season best track), PRISM rain (from 1981), Muller et al. deaths (Atlantic,
+    1963+), Mooney et al. normalized damage (1900–2023), Klotzbach et al. peak surge (hurricane landfalls 1964+);
+  - **no Storm Events before 1996** (`SE_YEAR0`): NCEI's files before 1996 hold only tornado / thunderstorm-wind
+    / hail rows with no narratives, which can't be tied to a storm — the page shows "Storm Events start in 1996"
+    instead of zeros; USGS high-water marks almost never (Isabel 2003 only); EAGLE-I outages never (2015+).
+  - Page: an "Older storm" note under the landfall sentence for storms before 2004; Andrew 1992 shows two
+    Miami-Dade landfalls because HURDAT2 has two (Elliott Key, then the mainland).
+- **Estimated landfalls** also apply to pre-2004 storms with no HURDAT2 landfall record (Beryl 1988 LA,
+  Marco 1990 FL, Iniki 1992 Kauai), and `track_landfalls()` now catches a centre crossing a small island
+  between two 6-hourly fixes (Iniki), not only one that ends a step over land. Flagged "Landfall estimated…" on
+  the page. Iniki's estimate reads Cat 3 (interpolated 110 kt) where NHC's report has Cat 4 at landfall.
 - **Layout**: header with landfall sentence(s) in local time → Hazards / Impacts / Exposure headline tiles →
   map with **layer chips that toggle independently and stack** (Hazards: wind, rain, storm surge, inland flooding, tornadoes ·
   Impacts: deaths, injuries, damage, power outages · Exposure: population) — each newly turned-on layer draws on top (numbered

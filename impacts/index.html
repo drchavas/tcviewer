@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storm Hazards &amp; Impacts — U.S. hurricane and tropical storm impacts by county | tcviewer.org</title>
-<meta name="description" content="What did a hurricane or tropical storm do to the U.S.? County-by-county wind, rainfall, flooding, tornadoes, deaths, injuries and damage for every storm since 2004 that brought tropical-storm-force winds to a U.S. county.">
+<meta name="description" content="What did a hurricane or tropical storm do to the U.S.? County-by-county wind, rainfall, flooding, tornadoes, deaths, injuries and damage for every storm since 1988 that brought tropical-storm-force winds to a U.S. county.">
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="https://tcviewer.org/impacts/">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -237,7 +237,9 @@
       <li><b>Wind</b> — areas reached by tropical-storm-force (39+ mph), 58+ mph and hurricane-force (74+ mph) sustained winds, from the
         NHC/JTWC best-track wind radii in <a href="https://www.ncei.noaa.gov/products/international-best-track-archive">IBTrACS v04r01</a>,
         swept along the track exactly as drawn on the <a href="../">track explorer</a>. A county counts if any part of it was inside.
-        Radii are analyzed routinely only since 2004, which is why the list starts then.</li>
+        NHC's post-season best-track radii begin in 2004; for 1988&ndash;2003 (Atlantic) and 1990&ndash;2003 (E/C Pacific) the radii are NHC's real-time
+        operational estimates from CIRA's <a href="https://rammb2.cira.colostate.edu/research/tropical-cyclones/tc_extended_best_track_dataset/" target="_blank" rel="noopener">Extended Best Track</a>
+        (Demuth et al. 2006), which is why the list starts in 1988.</li>
       <li><b>Rain</b> — storm-period totals from <a href="https://prism.oregonstate.edu">PRISM</a> daily 4-km precipitation
         (PRISM Group, Oregon State University), counting each day's rain only within 500 km of the storm's center (lower 48 states only).
         Gridded values smooth out the very highest gauge readings.</li>
@@ -251,7 +253,8 @@
         Peak storm surge per hurricane landfall from <a href="https://www.nature.com/articles/s44304-026-00257-w" target="_blank" rel="noopener">Klotzbach et al. (2026)</a>, <i>npj Natural Hazards</i>, using the observed surge database of <a href="https://surge.climate.lsu.edu/data.html" target="_blank" rel="noopener">Needham and Keim (2012)</a> (SURGEDAT) as updated there.</li>
       <li><b>Deaths, injuries, damage, tornadoes by county</b> — <a href="https://www.ncdc.noaa.gov/stormevents/">NCEI Storm Events Database</a>:
         reports tied to the storm (tropical-storm, hurricane and storm-surge reports near the track, plus any report whose narrative names the storm).
-        Reports filed for forecast zones are split evenly across the zone's counties. Damage is as reported at the time (not adjusted for inflation), and is incomplete.</li>
+        Reports filed for forecast zones are split evenly across the zone's counties. Damage is as reported at the time (not adjusted for inflation), and is incomplete.
+        Tropical-storm and hurricane reports (and narratives) start in 1996, so storms before 1996 have none.</li>
       <li><b>Direct deaths (storm total, by cause and state)</b> — <a href="https://www.nature.com/articles/s44304-026-00178-8" target="_blank" rel="noopener">Muller et al. (2026)</a>, <i>Continental United States direct Atlantic tropical cyclone fatalities: 1963–2024</i>, <i>npj Natural Hazards</i>;
         <a href="https://github.com/DrJoMuller/CONUS-TC-Fatalities-1963-2024">dataset</a>. Atlantic storms, lower 48 states.</li>
       <li><b>Normalized damage</b> — <a href="https://doi.org/10.1029/2025EA004869" target="_blank" rel="noopener">Mooney et al. (2026)</a>, <i>Earth and Space Science</i>
@@ -271,7 +274,7 @@
     <p>© 2026 <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a> (Purdue University) · <a href="../">Track &amp; wind-field explorer</a> · <a href="#feedback" data-feedback>Send feedback</a> · <span id="built"></span></p>
   </section>
 </main>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 <script src="../feedback.js" defer></script>
 </body>
 </html>

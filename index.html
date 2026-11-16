@@ -182,7 +182,7 @@
 <header>
   <div class="htop">
     <h1>Tropical Cyclone Track &amp; Wind-Field Explorer</h1>
-    <a class="implink" href="impacts/"><b>New: Storm Hazards &amp; Impacts</b><span class="long"> &mdash; county-by-county wind, rain, storm surge, flooding, tornadoes, deaths, damage and power outages for U.S. storms since 2004</span> &rarr;</a>
+    <a class="implink" href="impacts/"><b>New: Storm Hazards &amp; Impacts</b><span class="long"> &mdash; county-by-county wind, rain, storm surge, flooding, tornadoes, deaths, damage and power outages for U.S. storms since 1988</span> &rarr;</a>
   </div>
   <div class="hmeta">Data last updated <span id="lastUpd">&mdash;</span> &middot; <a href="#about">About this site &darr;</a> &middot; <a href="#feedback" data-feedback>Send feedback</a></div>
 </header>
@@ -962,7 +962,7 @@ window.__initViewer = function(){
     document.dispatchEvent(new CustomEvent('tcv:storm', {detail:TCV.current}));
   }
 
-  // link to the Storm Hazards & Impacts page when it covers this storm (U.S. storms since 2004)
+  // link to the Storm Hazards & Impacts page when it covers this storm (U.S. storms since 1988)
   let IMPACTS = null;
   function impactsLink(storm){
     const a = document.getElementById('impLink'); a.hidden = true;

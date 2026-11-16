@@ -2,7 +2,7 @@
 """
 build_impacts.py — build the data behind tcviewer.org/impacts/ ("Storm Hazards & Impacts").
 
-For every Atlantic / East-Pacific storm since 2004 whose 34-kt wind radii touched a U.S. county,
+For every Atlantic / East-Pacific storm since 1988 whose 34-kt wind radii touched a U.S. county,
 writes impacts/data/storms/<slug>.json with county-level hazards and impacts, plus
 impacts/data/index.json (the storm list with headline numbers).
 
@@ -41,7 +41,12 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, ".impacts_cache")
 OUT = os.path.join(HERE, "impacts", "data")
-YEAR0 = 2004                         # wind radii are routinely analysed from ~2004 on
+YEAR0 = 1988                         # wind radii: NHC best track from 2004; 1988-2003 from the Extended Best
+                                     # Track (real-time operational estimates; Atlantic 1988+, E/C Pacific 1990+),
+                                     # merged into data/basin_*.json by process_storms.py
+SE_YEAR0 = 1996                      # NCEI Storm Events has tropical-storm/hurricane event types and narratives
+                                     # only from 1996; earlier files hold just tornado/thunderstorm-wind/hail rows,
+                                     # which can't be tied to a storm, so storms before 1996 get no Storm Events data
 UA = {"User-Agent": "tcviewer.org impacts builder (Purdue Chavas lab)"}
 
 KLOTZBACH_XLSX = "44304_2026_257_MOESM2_ESM1.xlsx"   # Klotzbach et al. (2026) supplementary table
@@ -324,8 +329,9 @@ def wind_stage(s, C):
             if g:
                 lfs.append({"t": p["t"], "lat": p["lat"], "lon": p["lon"], "vmax": p["vmax"], "pmin": p["pmin"],
                             "sshs": p["sshs"], "county": g, "st": C.st[g], "cname": C.name[g]})
-    if not lfs and is_recent(P[-1]["t"], 365):
-        lfs = track_landfalls(P, C)     # NHC adds landfall records only with its post-season best track
+    if not lfs and (is_recent(P[-1]["t"], 365) or (s.get("year") or 0) < 2004):
+        lfs = track_landfalls(P, C)     # NHC adds landfall records only with its post-season best track, and
+                                        # HURDAT2 lacks them for some pre-2004 storms (e.g. Iniki 1992 on Kauai)
     return {"u": u, "counties": counties, "t0": min(tin), "t1": max(tin), "landfalls": lfs, "P": P}
 
 
@@ -347,9 +353,15 @@ def track_landfalls(P, C):
     out, last = [], None
     pts = [p for p in P if p["lat"] is not None and p["lon"] is not None]
     for a, b in zip(pts, pts[1:]):
-        if a.get("d2l") == 0 or C.at(a["lon"], a["lat"]) or not C.at(b["lon"], b["lat"]):
+        if a.get("d2l") == 0 or C.at(a["lon"], a["lat"]):
             continue                    # must come from water (IBTrACS distance-to-land 0 = over land, e.g. Mexico)
-        lo, hi = 0.0, 1.0
+        end = 1.0 if C.at(b["lon"], b["lat"]) else None
+        if end is None:                 # both ends over water: the centre may still cross a small island between fixes
+            end = next((k / 24 for k in range(1, 24)
+                        if C.at(a["lon"] + k / 24 * (b["lon"] - a["lon"]), a["lat"] + k / 24 * (b["lat"] - a["lat"]))), None)
+            if end is None:
+                continue
+        lo, hi = 0.0, end
         for _ in range(14):
             m = (lo + hi) / 2
             if C.at(a["lon"] + m * (b["lon"] - a["lon"]), a["lat"] + m * (b["lat"] - a["lat"])):
@@ -425,7 +437,7 @@ def load_storm_events(C):
     names = sorted(set(re.findall(r"StormEvents_details-ftp_v1\.0_d(\d{4})_c(\d{8})\.csv\.gz", lst)))
     want = {}
     for y, c in names:
-        if int(y) >= YEAR0:
+        if int(y) >= max(YEAR0, SE_YEAR0):
             want[int(y)] = f"StormEvents_details-ftp_v1.0_d{y}_c{c}.csv.gz"
     stale = False
     for y, f in want.items():
