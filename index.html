@@ -268,7 +268,7 @@
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
       <label class="legrow" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="tstates" checked><span class="sw" style="height:0;border:0;border-top:1.5px solid rgba(214,224,234,.8);border-radius:0"></span> U.S. state borders</label>
       <label class="legrow" style="cursor:pointer"><input type="checkbox" id="tcounties" checked><span class="sw" style="height:0;border:0;border-top:1px solid rgba(214,224,234,.4);border-radius:0"></span> U.S. county borders<span id="ctyHint" style="color:var(--muted);font-size:10.5px;display:none">&nbsp;(zoom in)</span></label>
-      <div class="note">Click a track point to highlight its wind radii and show full data. Wind-radii (R34/R50/R64) and Rmax are routinely analyzed from ~2004 on; earlier storms often lack them.</div>
+      <div class="note">Click a track point to highlight its wind radii and show full data. Wind radii (R34/R50/R64) and Rmax: NHC best track from 2004, real-time estimates (Extended Best Track) back to 1988 Atlantic / 1990 E/C Pacific; JTWC basins from ~2001.</div>
     </details>
     </div><!-- /#mapwrap -->
     <div id="timeseries"></div>
@@ -280,14 +280,13 @@
   <div class="in">
     <a class="top" href="#screen">&uarr; Back to the map</a>
     <h2 id="about-h">About this site</h2>
-    <p>Pick a <b>year</b> and <b>storm</b> to plot its best-track. The track is colored by Saffir&ndash;Simpson
-       category; shaded areas show the <b>34&nbsp;kt</b> (tropical-storm-force), <b>50&nbsp;kt</b> and <b>64&nbsp;kt</b> (hurricane-force)
-       wind radii at each time. <b>Click any track point</b> to read its date, position, intensity and size.</p>
     <p>Source: NOAA IBTrACS v04r01 &mdash; <b>all global basins</b>, using the US agency for each
        (NHC in the Atlantic &amp; E/C Pacific, JTWC elsewhere); all storms in the record.
+       Before 2004, wind radii, Rmax and the outer closed isobar for Atlantic (from 1988) and E/C Pacific (from 1990) storms come from
+       CIRA&rsquo;s <a href="https://rammb2.cira.colostate.edu/research/tropical-cyclones/tc_extended_best_track_dataset/" target="_blank" rel="noopener">Extended Best Track</a>
+       (Demuth et al. 2006): NHC&rsquo;s real-time operational estimates rather than post-season analyses.
        Most storms from 1940&ndash;2025 also have a <b>Hart phase space</b> diagram (Hart 2003), computed from ERA5 by RABTracks.</p>
-    <p>For comprehensive storm data visualization (e.g. radar/satellite), check out Michael Fischer&rsquo;s <a href="https://tcatlas.org/" target="_blank" rel="noopener">tcatlas.org</a>.
-       For more aggregated statistics see <a href="https://global-tropical-cyclones.com/" target="_blank" rel="noopener">global-tropical-cyclones.com</a>.</p>
+    <p>For comprehensive storm data visualization (e.g. radar/satellite), check out Michael Fischer&rsquo;s <a href="https://tcatlas.org/" target="_blank" rel="noopener">tcatlas.org</a>.</p>
     <div class="foot">&copy; 2026 <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a> (Purdue University) &middot; Site updated regularly. <a href="#feedback" data-feedback>Send feedback</a> with bugs or requests.</div>
   </div>
 </section>
@@ -804,7 +803,8 @@ window.__initViewer = function(){
     const r64=[p[ix.r64ne],p[ix.r64se],p[ix.r64sw],p[ix.r64nw]];
     return {lat:p[ix.lat],lon:p[ix.lon],vmax:p[ix.vmax],pmin:p[ix.pmin],
             sshs:p[ix.sshs],rmw:p[ix.rmw],spd:p[ix.spd],t:p[ix.t],r34,r50,r64,
-            nat:p[ix.nat],lf:p[ix.lf],dir:p[ix.dir],poci:p[ix.poci],roci:p[ix.roci],d2l:p[ix.d2l]};
+            nat:p[ix.nat],lf:p[ix.lf],dir:p[ix.dir],poci:p[ix.poci],roci:p[ix.roci],d2l:p[ix.d2l],
+            ebt:(ix.ebt!=null && p[ix.ebt]===1)};
   }
   // motion direction (deg, toward which the storm moves) -> 16-point compass
   function compass(deg){
@@ -838,7 +838,7 @@ window.__initViewer = function(){
         <tr><td class="k">ROCI</td><td class="v">${num(d.roci,' nm')}</td></tr>
         <tr><td class="k">Dist. to land</td><td class="v">${d.lf?'<span style="color:#ff5252;font-weight:700">LANDFALL</span>':(d.d2l==null?NA:(d.d2l===0?'<span style="color:#ff7b7b">over land</span>':`${d.d2l} km`))}</td></tr>
         <tr><td class="k">ATCF ID</td><td class="v">${curAtcf || NA}</td></tr>
-        <tr><td colspan="2" class="quad" style="padding:5px 0 6px;white-space:normal">radii shown as non-zero mean [NE/SE/SW/NW]</td></tr>
+        <tr><td colspan="2" class="quad" style="padding:5px 0 6px;white-space:normal">radii shown as non-zero mean [NE/SE/SW/NW]${d.ebt ? '<br><span style="color:#d9b26f">Size data here are NHC&rsquo;s real-time operational estimates (Extended Best Track); post-season best-track radii start in 2004.</span>' : ''}</td></tr>
         ${TCV.popupRows ? TCV.popupRows(d) : ''}
       </table>
       ${histsHtml(d)}</div>`;

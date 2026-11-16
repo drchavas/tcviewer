@@ -143,6 +143,90 @@ with open(SRC, newline="") as f:
             "d2l": inum(row[ci["DIST2LAND"]]),
         })
 
+# ---- Extended Best Track (EBTRK) fills storm-size data for NHC storms before 2004 ----
+# HURDAT2 / IBTrACS carry NHC's (post-season) best-track wind radii only from 2004 on. CIRA's
+# Extended Best Track (Demuth et al. 2006; https://rammb2.cira.colostate.edu/research/
+# tropical-cyclones/tc_extended_best_track_dataset/) adds the 34/50/64-kt radii, Rmax and the
+# outer closed isobar (POCI/ROCI) for 1988-2003 (Atlantic) and ~1990-2003 (E/C Pacific). Those
+# pre-2004 values are NHC's REAL-TIME OPERATIONAL estimates, not post-season analyses, so every
+# point that gets any of them is flagged `ebt` = 1 and the page says so. Rules:
+#   * matched by ATCF id + synoptic time; skipped if the EBTRK position is > 1 deg from IBTrACS;
+#   * only 1988-2003 (EBT_FIRST..EBT_BEFORE): from 2004 IBTrACS has the best-track radii itself,
+#     and before 1988 the file's radii are all-zero placeholders, not estimates;
+#   * before 2004 the 34/50/64-kt radii come from EBTRK ONLY (decided with Dan 2026-11-15): IBTrACS's
+#     2001-03 radii are R34-only real-time values (no R50/R64) that differ from EBTRK at ~27% of
+#     shared times, so mixing them would make storms inconsistent and drop the hurricane-force
+#     radii. Rmax / POCI / ROCI keep IBTrACS where present (identical to EBTRK wherever both exist)
+#     and are filled from EBTRK where missing.
+# Files (new format, v3.0.2, ends 2021) are kept gzipped in sources/ebtrk/; see SOURCE.md there.
+EBT_DIR = os.path.join(_here, "sources", "ebtrk")
+EBT_FIRST, EBT_BEFORE = 1988, 2004   # before 1988 the file's radii are all-zero placeholders
+
+def load_ebtrk():
+    recs = {}
+    if not os.path.isdir(EBT_DIR):
+        print("EBTRK: sources/ebtrk/ not found -- skipping"); return recs
+    for fn in sorted(os.listdir(EBT_DIR)):
+        if not (fn.startswith("EBTRK_") and "new_format" in fn and fn.endswith(".txt.gz")):
+            continue
+        with gzip.open(os.path.join(EBT_DIR, fn), "rt", encoding="ascii", errors="replace") as f:
+            for l in f:
+                l = l.rstrip("\n")
+                tok = l[:72].split()
+                if len(l) < 110 or len(tok) != 12:
+                    continue
+                atcf, _name, mdh, yr = tok[0], tok[1], tok[2], tok[3]
+                if not EBT_FIRST <= int(yr) < EBT_BEFORE:
+                    continue
+                def v(x):
+                    x = int(float(x)); return None if x == -99 else x
+                rad = [[v(l[a + i:a + i + 3]) for i in (0, 3, 6, 9)] for a in (72, 85, 98)]
+                recs.setdefault(atcf, {})[f"{yr}{mdh}00"] = {
+                    "lat": float(tok[4]), "lon": -float(tok[5]),   # file has deg W positive
+                    "rmw": v(tok[8]), "poci": v(tok[10]), "roci": v(tok[11]),
+                    "r34": rad[0], "r50": rad[1], "r64": rad[2]}
+    return recs
+
+_ebt = load_ebtrk()
+_ebt_pts = 0; _ebt_storms = set(); _ebt_far = 0; _ebt_cleared = 0; _ebt_nomatch = []
+NONE4 = [None] * 4
+def _pre2004(p): return int(p["t"][:4]) < EBT_BEFORE
+for sid in order:
+    s = storms[sid]
+    E = _ebt.get(s["atcf"])
+    if not E:
+        if any(_pre2004(p) and any(x is not None for x in p["r34"] + p["r50"] + p["r64"]) for p in s["pts"]):
+            if (s["atcf"] or "")[:2] in ("AL", "EP", "CP"):
+                _ebt_nomatch.append(s["atcf"])           # NHC storm with pre-2004 IBTrACS radii but no EBTRK record: kept
+        continue
+    for p in s["pts"]:
+        if not _pre2004(p):
+            continue
+        e = E.get(p["t"].replace("-", "").replace(":", "").replace(" ", "")[:12])
+        if e and (abs(e["lat"] - p["lat"]) > 1 or abs((e["lon"] - p["lon"] + 180) % 360 - 180) > 1):
+            _ebt_far += 1
+            if os.environ.get("EBT_DEBUG"): print("EBT far", s["atcf"], p["t"], p["lat"], p["lon"], e["lat"], e["lon"])
+            e = None
+        # Before 2004 the wind radii come from EBTRK only (one consistent source per storm): IBTrACS's
+        # 2001-03 radii are R34-only real-time values that often differ from EBTRK, and keeping them
+        # would hide EBTRK's R50/R64. Points without an EBTRK match lose their radii.
+        had = any(x is not None for x in p["r34"] + p["r50"] + p["r64"])
+        if e:
+            p["r34"], p["r50"], p["r64"] = list(e["r34"]), list(e["r50"]), list(e["r64"])
+        else:
+            p["r34"], p["r50"], p["r64"] = list(NONE4), list(NONE4), list(NONE4)
+            _ebt_cleared += had
+        got = e is not None and any(x is not None for x in e["r34"] + e["r50"] + e["r64"])
+        for k in ("rmw", "poci", "roci"):            # these agree with IBTrACS wherever both exist
+            if e and p[k] is None and e[k] is not None:
+                p[k] = e[k]; got = True
+        if got:
+            p["ebt"] = 1; _ebt_pts += 1; _ebt_storms.add(sid)
+print(f"EBTRK: {len(_ebt)} storms read; {_ebt_pts} points in {len(_ebt_storms)} storms use it; "
+      f"{_ebt_cleared} pre-2004 IBTrACS radii points without an EBTRK match cleared; "
+      f"{_ebt_far} matched points skipped (> 1 deg apart); "
+      f"NHC storms with pre-2004 IBTrACS radii but no EBTRK record (kept as is): {_ebt_nomatch}")
+
 # ---- size trim (keeps the global file small enough for the web) ----
 # The global record is ~725k points / 45 MB uncompressed. To shrink it we drop the
 # interpolated 3-hourly points (the swaths interpolate between points anyway) and keep:
@@ -178,7 +262,8 @@ years = sorted({s["year"] for s in out if s["year"] is not None})
 FIELDS = ["t","lat","lon","vmax","pmin","sshs","spd","dir","nat","lf","d2l",
           "rmw","poci","roci",
           "r34ne","r34se","r34sw","r34nw","r50ne","r50se","r50sw","r50nw",
-          "r64ne","r64se","r64sw","r64nw"]
+          "r64ne","r64se","r64sw","r64nw",
+          "ebt"]   # 1 = size fields on this point include EBTRK real-time operational estimates (pre-2004)
 
 def tcode(iso):  # "2012-10-21 18:00:00" -> "201210211800"
     d = iso.replace("-","").replace(":","").replace(" ","")
@@ -198,6 +283,7 @@ for s in out:
             tcode(p["t"]), p["lat"], p["lon"], p["vmax"], p["pmin"], p["sshs"],
             p["spd"], p["dir"], p["nat"], p["lf"], p["d2l"],
             p["rmw"], p["poci"], p["roci"], *p["r34"], *p["r50"], *p["r64"],
+            p.get("ebt"),
         ]
         cpts.append(trim(row))
     cstorms.append({"sid": s["sid"], "name": s["name"], "year": s["year"],

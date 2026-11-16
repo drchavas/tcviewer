@@ -64,8 +64,23 @@ rebuilds `data/`. Plain `process_storms.py` reuses a local CSV if present.
 ## Data notes
 - All basins, entire record, at synoptic (6-hourly) resolution plus landfall and wind-radii
   points (interpolated 3-hourly points dropped to keep files small).
-- Wind radii (R34/R50/R64), Rmax, POCI and ROCI are routinely analyzed only from ~2004 on;
-  earlier storms usually lack them. The most recent season is provisional/operational.
+- Wind radii (R34/R50/R64), Rmax, POCI and ROCI: NHC post-season best track from 2004 (via IBTrACS);
+  JTWC basins from ~2001. The most recent season is provisional/operational.
+- **Extended Best Track (added 2026-11-14).** For NHC storms before 2004, `process_storms.py` fills
+  size data from CIRA's Extended Best Track (EBTRK v3.0.2, Demuth et al. 2006), kept gzipped in
+  `sources/ebtrk/` (provenance and md5s in `sources/ebtrk/SOURCE.md`). Coverage: Atlantic radii from
+  1988 (1988–89 only where aircraft data existed), E/C Pacific from 1990 — 545 storms, ~14,200
+  points. These are NHC's **real-time operational** estimates, not post-season analyses, so each
+  point that gets any of them carries `ebt` = 1 (new last field in `meta.fields`) and the data box
+  says so; the legend note and the About section mention it too. Rules: 1988–2003 only (the file's
+  pre-1988 radii are all-zero placeholders); matched by ATCF id + synoptic time and skipped if the
+  positions differ by > 1° (EBTRK's EP121989 is a different storm). **Before 2004 the 34/50/64-kt radii
+  come from EBTRK only** (decided 2026-11-15): IBTrACS's 2001–03 radii are R34-only real-time values
+  (no R50/R64) that differ from EBTRK at ~27% of shared times, so mixing them made storms inconsistent
+  and hid the hurricane-force radii (Isabel 2003 had no 64-kt footprint). Rmax/POCI/ROCI keep IBTrACS
+  where present (identical to EBTRK wherever both exist) and are filled from EBTRK where missing. The size climatology still
+  uses 2004 onward only, so the percentiles are unchanged. Static: EBTRK ends in 2021 and only its
+  pre-2004 part is used, so it never needs refreshing.
 
 ## Rendering decisions worth not undoing
 
@@ -105,7 +120,7 @@ zoom.
 ### Page layout: app on one screen, "About this site" below
 The app (`#screen`: header + map + time-series strip) is exactly one screen tall (`100vh`/`100dvh`),
 and the page scrolls to an `#about` section below it holding the description, sources, the
-tcatlas.org / global-tropical-cyclones.com pointers, the copyright and the feedback line. The header
+tcatlas.org pointer, the copyright and the feedback line. The header
 is slim: title, the Storm Hazards & Impacts pill, and one line "Data last updated … · About this site ↓ ·
 Send feedback". (Until 2026-11-13 the body was `overflow:hidden` and all of that text sat in the header,
 shrinking the map.) Keep the explanatory text on the page rather than in a pop-up: tcviewer is the
